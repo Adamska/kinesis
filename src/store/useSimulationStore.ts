@@ -20,6 +20,8 @@ export interface TrackedHand {
   burstPending: boolean
   /** Interleaved xy image coordinates of the 21 landmarks, each in [0, 1]. */
   landmarks: Float32Array
+  /** Width over height of the camera frame the landmarks refer to. */
+  aspect: number
 }
 
 export interface Telemetry {
@@ -53,6 +55,7 @@ export const simulationBridge: SimulationBridge = {
     pinch: 0,
     burstPending: false,
     landmarks: new Float32Array(LANDMARK_COUNT * 2),
+    aspect: 4 / 3,
   },
   telemetry: { fps: 0, inferenceMs: 0, source: 'autonomous', gesture: 'flow' },
 }

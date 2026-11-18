@@ -27,3 +27,51 @@ body {
 canvas {
   touch-action: none;
 }
+
+.hud-safe-area {
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+}
+
+.hud-slider {
+  appearance: none;
+  height: 1rem;
+  background: transparent;
+  cursor: ew-resize;
+}
+
+.hud-slider::-webkit-slider-runnable-track {
+  height: 1px;
+  background: rgb(255 255 255 / 0.3);
+}
+
+.hud-slider::-moz-range-track {
+  height: 1px;
+  background: rgb(255 255 255 / 0.3);
+}
+
+.hud-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 3px;
+  height: 11px;
+  margin-top: -5px;
+  background: #fff;
+}
+
+.hud-slider::-moz-range-thumb {
+  width: 3px;
+  height: 11px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+
+.hud-slider:focus-visible {
+  outline: 1px solid var(--color-signal);
+  outline-offset: 4px;
+}
+
+button:focus-visible {
+  outline: 1px solid var(--color-signal);
+  outline-offset: 4px;
+}

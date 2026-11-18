@@ -13,12 +13,13 @@ const POSITION_RATE = 16
 const PINCH_RATE = 22
 const REACH_GAIN = 1.3
 
-const PINCH_CLOSED = 0.28
-const PINCH_OPEN = 0.8
+const PINCH_CLOSED = 0.22
+const PINCH_OPEN = 0.6
 const SPREAD_FIST = 1.2
 const SPREAD_OPEN = 1.7
 const NEAR_PALM = 0.3
 const FAR_PALM = 0.12
+const DEFAULT_ASPECT = 4 / 3
 
 const BURST_WINDOW_MS = 380
 const BURST_COOLDOWN_MS = 650
@@ -119,7 +120,7 @@ export class HandTracker {
 
     // Landmarks are normalized per axis; scaling x by the aspect ratio makes image-plane
     // distances isotropic. Dividing by palm length makes every metric distance-invariant.
-    const aspect = this.video.videoWidth / Math.max(this.video.videoHeight, 1)
+    const aspect = this.video.videoWidth / this.video.videoHeight || DEFAULT_ASPECT
     const span = (a: number, b: number) =>
       Math.hypot((landmarks[a].x - landmarks[b].x) * aspect, landmarks[a].y - landmarks[b].y)
 
@@ -163,6 +164,7 @@ export class HandTracker {
       hand.landmarks[index * 2] = landmarks[index].x
       hand.landmarks[index * 2 + 1] = landmarks[index].y
     }
+    hand.aspect = aspect
     hand.visible = true
     hand.seenAt = now
     this.lastSampleAt = now
