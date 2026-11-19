@@ -75,3 +75,19 @@ button:focus-visible {
   outline: 1px solid var(--color-signal);
   outline-offset: 4px;
 }
+
+/* Transform-only animation: it runs on the compositor and keeps moving even if the
+   main thread is busy, so the startup panel never looks stalled. */
+.hud-sweep {
+  transform-origin: left;
+  animation: hud-sweep 1.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes hud-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

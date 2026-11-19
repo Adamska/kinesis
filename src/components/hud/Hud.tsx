@@ -3,6 +3,7 @@ import { ControlDock } from './ControlDock'
 import { HandSkeletonPreview } from './HandSkeletonPreview'
 import { InteractionGuide } from './InteractionGuide'
 import { TelemetryOverlay } from './TelemetryOverlay'
+import { VisionStatusPanel } from './VisionStatusPanel'
 
 export function Hud() {
   const tracking = useSimulationStore((state) => state.vision === 'active')
@@ -16,6 +17,9 @@ export function Hud() {
           <InteractionGuide />
         </div>
       </header>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <VisionStatusPanel />
+      </div>
       <footer className="flex justify-center">
         <ControlDock />
       </footer>
