@@ -10,8 +10,12 @@ const SHOCKWAVE_DECAY = 3.2
 const SHOCKWAVE_FLOOR = 0.004
 const MAX_HAND_SPEED = 7
 const HAND_STALE_MS = 400
-const HAND_DEPTH_RANGE = 0.9
-const HAND_REACH = 1.9
+const HAND_DEPTH_RANGE = 0.5
+const HAND_REACH = 2.2
+
+// A hand sweeps a much shorter world distance than a pointer flick for the same
+// intent, so tracked motion is amplified to stir the fluid just as hard.
+const VELOCITY_GAIN: Record<InputSource, number> = { autonomous: 1, pointer: 1, tracking: 2.4 }
 
 /**
  * Projects a normalized device coordinate onto the plane through the origin that
@@ -79,6 +83,7 @@ export class ForceDirector {
     this.velocity
       .subVectors(bridge.handPos, this.previous)
       .divideScalar(dt)
+      .multiplyScalar(VELOCITY_GAIN[source])
       .clampLength(0, MAX_HAND_SPEED)
     bridge.handVelocity.lerp(this.velocity, 1 - Math.exp(-dt * VELOCITY_RATE))
 
