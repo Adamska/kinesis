@@ -33,7 +33,7 @@ The dock at the bottom switches between three palettes (Bioluminescent Abyss, So
 ## Architecture
 
 ```
- webcam ──> HandTracker (30 Hz timer) ──┐
+ webcam ──> HandTracker ⇄ Web Worker ───┐
  pointer ─> PointerField ───────────────┼─> ForceDirector ──> simulationBridge
  Lorenz ──> AutonomousFlow ─────────────┘                          │
                                                                    │ read every frame
@@ -59,7 +59,8 @@ src/
   gpgpu/        SimulationEngine (ping-pong targets, passes, disposal), seed state
   shaders/      curlNoise.glsl, velocity.frag, position.frag, particle.vert, particle.frag
   input/        ForceDirector, AutonomousFlow (Lorenz + Lissajous), PointerField
-  vision/       HandTracker (MediaPipe wrapper, gesture math), session lifecycle
+  vision/       HandTracker (camera, frame pump), landmark worker (MediaPipe),
+                GestureExtractor (gesture math), OneEuroFilter, session lifecycle
   scene/        Stage, ParticleField, PostProcessingStack, CameraRig, AdaptiveResolution
   store/        Zustand store and the simulation bridge
   components/   HUD: telemetry overlay, control dock, gesture indicator, hand skeleton
@@ -105,15 +106,20 @@ Two full-screen triangles per frame, 102,400 fragments each. The time step is cl
 
 ## Hand tracking
 
-`HandTracker` runs MediaPipe `HandLandmarker` (GPU delegate, CPU fallback) on an offscreen `<video>` element. Inference runs on the main thread but on its own 30 Hz timer, skipping ticks when the camera has no new frame, so its cadence is decoupled from the render loop and it is never called from `useFrame`. The MediaPipe runtime is imported on demand and never weighs on the initial load.
+MediaPipe `HandLandmarker` (GPU delegate, CPU fallback) runs in a dedicated Web Worker. `HandTracker` samples an offscreen `<video>` element on a 30 Hz timer, turns each new camera frame into an `ImageBitmap` and transfers it to the worker; a frame is only sent once the previous result has come back. Downloading, compiling and running the model all happen off the main thread, so neither startup nor inference can drop a rendered frame.
+
+The worker streams the runtime and model downloads itself, which lets the HUD show real startup progress, then hands the bytes to MediaPipe so nothing is fetched twice. The vision code is imported on demand and never weighs on the initial load.
 
 Gesture metrics are divided by palm length (wrist to middle knuckle), which makes them independent of distance from the camera:
 
-- **Position**: palm center, mirrored and exponentially smoothed. Apparent palm size maps to depth.
+- **Position**: palm center, mirrored and passed through a One Euro filter, an exponential smoother whose cutoff rises with speed: a resting hand stays steady and a moving hand is followed with little lag. Apparent palm size maps to depth.
+- **Dropouts**: motion blur can lose the hand for a frame or two mid-gesture. The last pose is held for 280 ms so the force field does not jump to another input source.
 - **Pinch**: thumb-tip to index-tip distance, mapped through a smoothstep to a strength in `[0, 1]`.
 - **Shockwave**: fires when a closed or pinched hand becomes wide open within 380 ms.
 
-Camera frames are processed locally and never leave the device. The WASM runtime and model are fetched from the jsDelivr and Google Storage CDNs the first time tracking is enabled.
+A hand covers far less world distance than a pointer flick, so `ForceDirector` amplifies tracked velocity before it reaches the drag term.
+
+Camera frames are processed locally and never leave the device. The WASM runtime and model (about 22 MB in total) are fetched from the jsDelivr and Google Storage CDNs the first time tracking is enabled.
 
 ## Performance notes
 
