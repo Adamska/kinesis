@@ -10,19 +10,29 @@ function classifyFailure(error: unknown): VisionStatus {
 }
 
 /**
- * Starts webcam hand tracking. MediaPipe is imported on demand so the vision runtime
+ * Starts webcam hand tracking. The tracker is imported on demand so the vision code
  * never weighs on the initial page load. The generation counter invalidates a start
  * that is still pending when the session is stopped or restarted.
  */
 export async function enableTracking(): Promise<void> {
-  const { vision, setVision } = useSimulationStore.getState()
+  const { vision, setVision, setVisionStage } = useSimulationStore.getState()
   if (vision === 'loading' || vision === 'active') return
 
   const token = ++generation
+  const fail = (error: unknown) => {
+    if (token !== generation) return
+    tracker?.dispose()
+    tracker = null
+    setVision(classifyFailure(error))
+  }
+
   setVision('loading')
   try {
     const { HandTracker } = await import('./HandTracker')
-    const instance = new HandTracker()
+    const instance = new HandTracker({
+      onStage: (stage) => token === generation && setVisionStage(stage),
+      onFailure: fail,
+    })
     await instance.start()
     if (token !== generation) {
       instance.dispose()
@@ -31,7 +41,7 @@ export async function enableTracking(): Promise<void> {
     tracker = instance
     setVision('active')
   } catch (error) {
-    if (token === generation) setVision(classifyFailure(error))
+    fail(error)
   }
 }
 

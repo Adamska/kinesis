@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { DEFAULT_PALETTE, type PaletteId } from '../config/palettes'
 import type { ForceField } from '../gpgpu/SimulationEngine'
 import { LANDMARK_COUNT } from '../vision/handTopology'
+import type { TrackerStage } from '../vision/HandTracker'
 
 export type InputSource = 'autonomous' | 'pointer' | 'tracking'
 export type Gesture = 'flow' | 'pinch' | 'shockwave'
@@ -27,6 +28,7 @@ export interface TrackedHand {
 export interface Telemetry {
   fps: number
   inferenceMs: number
+  downloadedBytes: number
   source: InputSource
   gesture: Gesture
 }
@@ -57,7 +59,7 @@ export const simulationBridge: SimulationBridge = {
     landmarks: new Float32Array(LANDMARK_COUNT * 2),
     aspect: 4 / 3,
   },
-  telemetry: { fps: 0, inferenceMs: 0, source: 'autonomous', gesture: 'flow' },
+  telemetry: { fps: 0, inferenceMs: 0, downloadedBytes: 0, source: 'autonomous', gesture: 'flow' },
 }
 
 export const TURBULENCE_RANGE = { min: 0.2, max: 2.5, step: 0.05 } as const
@@ -66,16 +68,20 @@ interface SimulationStore {
   palette: PaletteId
   turbulence: number
   vision: VisionStatus
+  visionStage: TrackerStage
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
   setVision: (vision: VisionStatus) => void
+  setVisionStage: (visionStage: TrackerStage) => void
 }
 
 export const useSimulationStore = create<SimulationStore>()((set) => ({
   palette: DEFAULT_PALETTE,
   turbulence: 1,
   vision: 'idle',
+  visionStage: 'permission',
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
   setVision: (vision) => set({ vision }),
+  setVisionStage: (visionStage) => set({ visionStage }),
 }))
