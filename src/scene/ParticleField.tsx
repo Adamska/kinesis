@@ -18,7 +18,7 @@ import { simulationBridge, useSimulationStore } from '../store/useSimulationStor
 
 const PARTICLE_SIZE = 0.022
 const PALETTE_BLEND_RATE = 4
-const FPS_SMOOTHING = 0.05
+const FRAME_TIME_SMOOTHING = 0.05
 
 const scratch = new Vector3()
 
@@ -51,6 +51,7 @@ function createParticleUniforms(palette: CosinePalette) {
 export function ParticleField() {
   const gl = useThree((state) => state.gl)
   const engineRef = useRef<SimulationEngine | null>(null)
+  const frameTime = useRef(1 / 60)
   const director = useMemo(() => new ForceDirector(), [])
 
   const { geometry, material, uniforms } = useMemo(() => {
@@ -105,8 +106,10 @@ export function ParticleField() {
     uniforms.uPaletteC.value.lerp(scratch.fromArray(target.c), blend)
     uniforms.uPaletteD.value.lerp(scratch.fromArray(target.d), blend)
 
-    const telemetry = simulationBridge.telemetry
-    telemetry.fps += (1 / Math.max(delta, 1e-4) - telemetry.fps) * FPS_SMOOTHING
+    // Average the frame time and invert it: averaging 1 / delta would overstate the
+    // rate whenever short frames bunch up behind a long one.
+    frameTime.current += (delta - frameTime.current) * FRAME_TIME_SMOOTHING
+    simulationBridge.telemetry.fps = 1 / Math.max(frameTime.current, 1e-4)
   })
 
   return <points geometry={geometry} material={material} frustumCulled={false} />
