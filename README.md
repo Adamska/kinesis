@@ -2,6 +2,8 @@
 
 A real-time fluid of 102,400 particles simulated entirely on the GPU and steered by hand gestures from a webcam. Everything runs client-side in the browser: the physics in fragment shaders, the hand tracking in WebAssembly.
 
+**Live demo: [kinesis-chi.vercel.app](https://kinesis-chi.vercel.app)**
+
 https://github.com/user-attachments/assets/3f41e1b1-8396-4dca-bb25-a712b9d310d2
 
 The simulation starts at full fidelity on page load with no permissions required. An autonomous attractor drives the flow until you take over with the pointer or enable webcam tracking.
