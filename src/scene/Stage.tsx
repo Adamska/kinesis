@@ -1,4 +1,5 @@
 import { Canvas } from '@react-three/fiber'
+import { registerCaptureCanvas } from '../capture/clipRecorder'
 import { AdaptiveResolution, MAX_PIXEL_RATIO } from './AdaptiveResolution'
 import { CameraRig } from './CameraRig'
 import { ForceReticles } from './ForceReticles'
@@ -15,6 +16,7 @@ export function Stage() {
       flat
       dpr={[1, MAX_PIXEL_RATIO]}
       camera={{ position: [0, 0, 5], fov: 45, near: 0.1, far: 50 }}
+      onCreated={({ gl }) => registerCaptureCanvas(gl.domElement)}
       gl={{ antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' }}
     >
       <color attach="background" args={[VOID_COLOR]} />

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { toggleRecording } from '../capture/clipRecorder'
 import { PALETTE_IDS } from '../config/palettes'
 import { clampTurbulence } from '../config/settings'
 import { SHAPE_IDS } from '../gpgpu/shapeTargets'
@@ -43,6 +44,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   { keys: [' '], label: 'Space', action: 'Shockwave', run: () => (simulationBridge.burstRequested = true) },
   { keys: ['[', ']'], label: '[ ]', action: 'Turbulence', run: (key) => nudgeTurbulence(key === ']' ? 1 : -1) },
+  { keys: ['r'], label: 'R', action: 'Record clip', run: toggleRecording },
   { keys: ['w'], label: 'W', action: 'Webcam tracking', run: toggleTracking },
   { keys: ['h'], label: 'H', action: 'Hide interface', run: () => useSimulationStore.getState().toggleZen() },
   { keys: ['f'], label: 'F', action: 'Fullscreen', run: toggleFullscreen },

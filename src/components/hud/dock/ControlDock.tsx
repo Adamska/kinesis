@@ -2,6 +2,7 @@ import { GestureIndicator } from '../GestureIndicator'
 import { DockCell } from './DockCell'
 import { FormSwitch } from './FormSwitch'
 import { PaletteSwitch, TrackingPill, TurbulenceControl } from './PrimaryControls'
+import { RecordToggle } from './RecordToggle'
 
 const ROW = 'flex w-full flex-wrap justify-center sm:w-auto'
 
@@ -14,6 +15,9 @@ export function ControlDock() {
       <div className={ROW}>
         <DockCell label="Form">
           <FormSwitch />
+        </DockCell>
+        <DockCell label="Capture">
+          <RecordToggle />
         </DockCell>
       </div>
       <div className={ROW}>
