@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 
 /** One hairline-bordered compartment of the dock; neighbors share their borders. */
-export function DockCell({ children, label }: { children: ReactNode; label?: string }) {
+export function DockCell({ children, label, className = '' }: { children: ReactNode; label?: string; className?: string }) {
   return (
-    <div className="-ml-px -mt-px flex h-11 w-full items-center justify-center gap-3 border border-hairline bg-void/65 px-4 backdrop-blur-md sm:w-auto">
+    <div
+      className={`-ml-px -mt-px flex h-11 w-full items-center justify-center gap-3 border border-hairline bg-void/65 px-4 backdrop-blur-md sm:w-auto ${className}`}
+    >
       {label && <span className="text-white/40">{label}</span>}
       {children}
     </div>
