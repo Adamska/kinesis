@@ -6,7 +6,7 @@ uniform float uTurbulence;
 uniform vec3 uForcePosition[FORCE_COUNT];
 uniform vec3 uForceVelocity[FORCE_COUNT];
 uniform vec3 uForceAxis[FORCE_COUNT];
-// x = pinch strength, y = shockwave impulse, z = presence of a user steering it.
+// x = pinch strength, y = shockwave impulse, z = carry weight (see the drag term).
 uniform vec3 uForceDrive[FORCE_COUNT];
 
 varying vec2 vUv;
@@ -16,7 +16,7 @@ const float TAU = 6.283185307179586;
 const float FLOW_SPEED = 0.1;
 const float REST_RADIUS = 1.55;
 const float CONFINEMENT_STIFFNESS = 6.0;
-const float MAX_SPEED = 7.0;
+const float MAX_SPEED = 9.0;
 
 const float PINCH_MASS = 4.2;
 const float PINCH_CORE = 0.3;
@@ -30,6 +30,12 @@ const float SHOCK_GAIN = 14.0;
 
 const float DRAG_RADIUS = 0.75;
 const float DRAG_GAIN = 1.6;
+
+const float CARRY_RADIUS = 0.45;
+const float CARRY_RATE = 14.0;
+// Share of the hand's speed that carried matter reaches; slightly under 1 keeps the
+// wake trailing the hand instead of piling up in front of it.
+const float CARRY_SHARE = 0.85;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -102,9 +108,25 @@ void main() {
     float shell = exp(-pow((dist - front) / SHOCK_WIDTH, 2.0));
     acceleration += radial * impulse * SHOCK_GAIN * shell;
 
-    // Translation: entrain nearby fluid along the force point's velocity.
+    // Translation. A pushing point accelerates nearby fluid along its velocity. A
+    // carrying point (a tracked hand) instead brings nearby particles up to its own
+    // velocity along its direction of travel and damps their sideways drift, so the
+    // fluid travels with the hand and a wide sweep drags a wide wake. A still hand
+    // leaves the flow alone.
+    vec3 handVelocity = uForceVelocity[i];
+    float handSpeed = length(handVelocity);
+    float carry = uForceDrive[i].z;
     float reach = exp(-dist * dist / (DRAG_RADIUS * DRAG_RADIUS));
-    acceleration += uForceVelocity[i] * DRAG_GAIN * reach;
+    acceleration += handVelocity * DRAG_GAIN * reach * (1.0 - carry);
+    if (carry > 0.0 && handSpeed > 1e-3) {
+      vec3 heading = handVelocity / handSpeed;
+      float wake = CARRY_RADIUS * (1.0 + 0.6 * min(handSpeed / 4.0, 1.0));
+      float grip = carry * smoothstep(0.1, 0.6, handSpeed) * exp(-dist * dist / (wake * wake))
+        * (1.0 - exp(-uDelta * CARRY_RATE));
+      float along = dot(velocity, heading);
+      vec3 across = velocity - heading * along;
+      velocity += heading * (CARRY_SHARE * handSpeed - along) * grip - across * grip * 0.5;
+    }
   }
 
   velocity += acceleration * uDelta;

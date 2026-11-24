@@ -14,8 +14,13 @@ export interface ForcePoint {
   pinch: number
   /** Shockwave impulse decaying from 1 to 0; 1 - impulse is the blast's age. */
   impulse: number
-  /** How visibly a user is steering this point, from 0 to 1. Drives the reticle only. */
+  /** How visibly a user is steering this point, from 0 to 1. Drives the reticle and focus. */
   presence: number
+  /**
+   * How the point moves matter: 0 pushes it with an acceleration along the point's
+   * velocity, 1 carries it along at the point's own speed.
+   */
+  carry: number
 }
 
 export interface ForceField {
@@ -31,5 +36,6 @@ export function createForcePoint(index: number): ForcePoint {
     pinch: 0,
     impulse: 0,
     presence: 0,
+    carry: 0,
   }
 }

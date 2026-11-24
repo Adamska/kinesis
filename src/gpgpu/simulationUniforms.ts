@@ -31,7 +31,7 @@ export type VelocityUniforms = ReturnType<typeof createVelocityUniforms>
 export function bindForces(uniforms: ForceUniforms, forces: ForceField): void {
   forces.points.forEach((point, index) => {
     uniforms.uForcePosition.value[index].copy(point.position)
-    uniforms.uForceDrive.value[index].set(point.pinch, point.impulse, point.presence)
+    uniforms.uForceDrive.value[index].set(point.pinch, point.impulse, point.carry)
   })
 }
 

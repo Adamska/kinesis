@@ -8,6 +8,7 @@ import { PointerField } from './PointerField'
 const PINCH_RATE = 9
 const AXIS_RATE = 6
 const PRESENCE_RATE = 8
+const CARRY_RATE = 6
 const SHOCKWAVE_DECAY = 3.2
 const SHOCKWAVE_FLOOR = 0.004
 const MAX_SPEED = 9
@@ -23,16 +24,16 @@ interface SourceProfile {
   follow: number
   /** Rate at which the measured velocity is smoothed, per second. */
   velocity: number
-  /** A hand sweeps a shorter world distance than a pointer flick for the same intent. */
-  gain: number
+  /** 1 when matter is carried along at the input's own velocity, 0 when it is pushed. */
+  carry: number
 }
 
 // A tracked hand is already filtered and played back along a smooth path, so it is
 // followed almost directly; the pointer and attractor keep their softer response.
 const PROFILES: Record<InputSource, SourceProfile> = {
-  autonomous: { follow: 14, velocity: 10, gain: 1 },
-  pointer: { follow: 14, velocity: 10, gain: 1 },
-  tracking: { follow: 60, velocity: 22, gain: 2.4 },
+  autonomous: { follow: 14, velocity: 10, carry: 0 },
+  pointer: { follow: 14, velocity: 10, carry: 0 },
+  tracking: { follow: 60, velocity: 22, carry: 1 },
 }
 
 interface ForceInput {
@@ -93,6 +94,7 @@ export class ForceDirector {
       this.resolve(point, index, dt, profile)
       const steered = source !== 'autonomous' && this.inputs[index].active ? 1 : 0
       point.presence += (steered - point.presence) * (1 - Math.exp(-dt * PRESENCE_RATE))
+      point.carry += (profile.carry - point.carry) * (1 - Math.exp(-dt * CARRY_RATE))
       pinch = Math.max(pinch, point.pinch)
       impulse = Math.max(impulse, point.impulse)
     })
@@ -168,7 +170,7 @@ export class ForceDirector {
 
     previous.copy(point.position)
     if (input.active) point.position.lerp(input.target, 1 - Math.exp(-dt * profile.follow))
-    velocity.subVectors(point.position, previous).divideScalar(dt).multiplyScalar(profile.gain).clampLength(0, MAX_SPEED)
+    velocity.subVectors(point.position, previous).divideScalar(dt).clampLength(0, MAX_SPEED)
     if (arriving) point.velocity.set(0, 0, 0)
     else point.velocity.lerp(velocity, 1 - Math.exp(-dt * profile.velocity))
 
