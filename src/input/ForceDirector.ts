@@ -4,6 +4,7 @@ import { simulationBridge, useSimulationStore, type InputSource } from '../store
 import { AutonomousFlow } from './AutonomousFlow'
 import { projectToFocalPlane } from './focalPlane'
 import { PointerField } from './PointerField'
+import { PROFILES, type SourceProfile } from './sourceProfiles'
 
 const PINCH_RATE = 9
 const AXIS_RATE = 6
@@ -16,25 +17,11 @@ const HAND_STALE_MS = 400
 // After the last hand leaves, its force points stay put this long before the
 // attractor takes over, so a brief loss of tracking never sweeps across the cloud.
 const HAND_HOLD_MS = 2500
+// The attractor only gathers and bursts once nobody has steered for this long; while
+// a user is around it just circulates, so nothing ever explodes away from their hand.
+const ATTRACT_DELAY_MS = 30_000
 const HAND_DEPTH_RANGE = 0.5
 const HAND_REACH = 2.2
-
-interface SourceProfile {
-  /** Rate at which the force point follows its input, per second. */
-  follow: number
-  /** Rate at which the measured velocity is smoothed, per second. */
-  velocity: number
-  /** 1 when matter is carried along at the input's own velocity, 0 when it is pushed. */
-  carry: number
-}
-
-// A tracked hand is already filtered and played back along a smooth path, so it is
-// followed almost directly; the pointer and attractor keep their softer response.
-const PROFILES: Record<InputSource, SourceProfile> = {
-  autonomous: { follow: 14, velocity: 10, carry: 0 },
-  pointer: { follow: 14, velocity: 10, carry: 0 },
-  tracking: { follow: 60, velocity: 22, carry: 1 },
-}
 
 interface ForceInput {
   active: boolean
@@ -66,18 +53,25 @@ export class ForceDirector {
   private readonly wasActive: boolean[] = Array.from({ length: FORCE_POINT_COUNT }, () => false)
   private source: InputSource = 'autonomous'
   private lastHandAt = Number.NEGATIVE_INFINITY
+  private lastUserAt = Number.NEGATIVE_INFINITY
+  private attracting = true
 
   update(delta: number, camera: Camera): void {
     const dt = Math.max(delta, 1e-4)
+    const now = performance.now()
     const tracking = useSimulationStore.getState().vision === 'active'
-    this.autonomous.advance(delta, tracking)
+    const attracting = !tracking && now - this.lastUserAt >= ATTRACT_DELAY_MS
+    if (attracting && !this.attracting) this.autonomous.restartCycle()
+    this.attracting = attracting
+    this.autonomous.advance(delta, !attracting)
     for (const input of this.inputs) {
       input.active = false
       input.burst = false
       input.axis = null
     }
 
-    const source = this.gather(performance.now(), camera, tracking)
+    const source = this.gather(now, camera, tracking)
+    if (source !== 'autonomous') this.lastUserAt = now
     // A new source starts where it is, instead of dragging its points across the cloud.
     if (source !== this.source) this.wasActive.fill(false)
     this.source = source

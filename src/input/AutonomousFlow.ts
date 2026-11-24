@@ -51,6 +51,12 @@ export class AutonomousFlow {
     )
   }
 
+  /** Starts a fresh gather-then-burst cycle, so a resumed attractor never bursts at once. */
+  restartCycle(): void {
+    this.clock = INITIAL_CLOCK + Math.floor(this.clock / CYCLE_SECONDS) * CYCLE_SECONDS
+    this.burstPending = false
+  }
+
   consumeBurst(): boolean {
     const pending = this.burstPending
     this.burstPending = false
