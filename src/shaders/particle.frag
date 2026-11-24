@@ -8,6 +8,7 @@ varying float vStretch;
 varying float vTone;
 varying float vIntensity;
 varying float vOpacity;
+varying float vDefocus;
 
 const float TAU = 6.283185307179586;
 
@@ -28,9 +29,12 @@ void main() {
   float r2 = along * along + across * across;
   if (r2 > 1.0) discard;
 
-  float core = exp(-9.0 * r2);
-  float halo = 0.18 * (1.0 - r2) * (1.0 - r2);
+  // In focus: a bright Gaussian core with a soft halo. Out of focus: a flat bokeh disc
+  // with a faint rim, as a real lens renders a defocused point of light.
+  float sharp = exp(-9.0 * r2) + 0.18 * (1.0 - r2) * (1.0 - r2);
+  float bokeh = 0.32 * (smoothstep(1.0, 0.75, r2) + 0.4 * smoothstep(0.55, 0.95, r2) * step(r2, 1.0));
+  float profile = mix(sharp, bokeh, vDefocus);
   vec3 color = max(palette(vTone), 0.0) * vIntensity;
 
-  gl_FragColor = vec4(color, (core + halo) * vOpacity);
+  gl_FragColor = vec4(color, profile * vOpacity);
 }

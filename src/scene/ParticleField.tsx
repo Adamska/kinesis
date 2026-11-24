@@ -23,6 +23,9 @@ const PALETTE_BLEND_RATE = 4
 const FRAME_TIME_SMOOTHING = 0.05
 // Loud passages from the microphone stir the field harder.
 const AUDIO_TURBULENCE_GAIN = 1.6
+// Blur radius per world unit of distance from the focal plane.
+const APERTURE = 0.024
+const FOCUS_RATE = 3
 
 const scratch = new Vector3()
 
@@ -49,6 +52,8 @@ function createParticleUniforms(palette: CosinePalette, size: number) {
     uVelocities: { value: null as Texture | null },
     uResolution: { value: new Vector2(1, 1) },
     uParticleSize: { value: PARTICLE_SIZE * Math.min(ratio ** 0.2, 1.1) },
+    uFocusDistance: { value: 5 },
+    uAperture: { value: APERTURE },
     uPaletteA: { value: new Vector3(...palette.a) },
     uPaletteB: { value: new Vector3(...palette.b) },
     uPaletteC: { value: new Vector3(...palette.c) },
@@ -115,6 +120,12 @@ export function ParticleField({ size }: { size: number }) {
     uniforms.uPositions.value = engine.positionTexture
     uniforms.uVelocities.value = engine.velocityTexture
     state.gl.getDrawingBufferSize(uniforms.uResolution.value)
+
+    // Focus rests on the center of the cloud and racks to the force point a user steers.
+    const lead = simulationBridge.points[0]
+    const center = state.camera.position.length()
+    const focus = center + (state.camera.position.distanceTo(lead.position) - center) * lead.presence
+    uniforms.uFocusDistance.value += (focus - uniforms.uFocusDistance.value) * (1 - Math.exp(-delta * FOCUS_RATE))
 
     const blend = 1 - Math.exp(-delta * PALETTE_BLEND_RATE)
     const target = PALETTES[palette]

@@ -3,17 +3,21 @@ uniform sampler2D uVelocities;
 uniform vec2 uResolution;
 uniform float uParticleSize;
 uniform float uDensityGain;
+uniform float uFocusDistance;
+uniform float uAperture;
 
 varying vec2 vAxis;
 varying float vStretch;
 varying float vTone;
 varying float vIntensity;
 varying float vOpacity;
+varying float vDefocus;
 
 const float TAU = 6.283185307179586;
 const float MIN_POINT_SIZE = 2.0;
 const float STRETCH_GAIN = 0.55;
 const float MAX_STRETCH = 4.0;
+const float MAX_BOKEH_GROWTH = 5.0;
 
 void main() {
   // The position attribute is repurposed: xy addresses this particle's texel in the
@@ -34,7 +38,13 @@ void main() {
   // of one world unit at the particle's depth.
   float pixelsPerUnit = projectionMatrix[1][1] * uResolution.y * 0.5 / max(-viewPosition.z, 0.1);
   float diameter = uParticleSize * mix(0.6, 1.4, seed) * pixelsPerUnit;
-  float size = max(diameter, MIN_POINT_SIZE);
+
+  // Thin-lens depth of field: the circle of confusion grows linearly with distance
+  // from the focal plane. Out-of-focus particles become wider, dimmer discs.
+  float confusion = abs(-viewPosition.z - uFocusDistance) * uAperture * pixelsPerUnit;
+  float blurred = min(diameter + confusion, diameter * MAX_BOKEH_GROWTH + MIN_POINT_SIZE);
+  vDefocus = clamp(confusion / max(blurred, 1e-3), 0.0, 1.0);
+  float size = max(blurred, MIN_POINT_SIZE);
   gl_PointSize = size * vStretch;
 
   float speed = length(motion.xyz);
@@ -44,7 +54,8 @@ void main() {
   float shimmer = 0.8 + 0.2 * sin(TAU * (motion.w + seed));
   vIntensity = (1.1 + 1.6 * heat * heat) * shimmer;
 
-  // Sprites below MIN_POINT_SIZE are clamped up, and stretching spreads a sprite over
-  // a longer streak. Scaling opacity by both area ratios keeps emitted light constant.
+  // Sprites below MIN_POINT_SIZE are clamped up, defocus widens them and stretching
+  // spreads them over a streak. Scaling opacity by the area ratios keeps emitted light
+  // constant.
   vOpacity = (diameter * diameter) / (size * size) / vStretch * uDensityGain;
 }
