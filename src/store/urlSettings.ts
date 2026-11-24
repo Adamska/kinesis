@@ -1,14 +1,11 @@
 import { DEFAULT_PALETTE, PALETTE_IDS, type PaletteId } from '../config/palettes'
 import { detectDensity, isDensity, type DensityId } from '../config/density'
-import { REDUCED_MOTION } from '../config/motion'
 import { clampTurbulence, DEFAULT_TURBULENCE } from '../config/settings'
-import { SHAPE_IDS, type ShapeId } from '../gpgpu/shapeTargets'
 
 /** The part of the interface state that a shared link reproduces. */
 export interface SharedSettings {
   palette: PaletteId
   turbulence: number
-  shape: ShapeId
   density: DensityId
 }
 
@@ -16,33 +13,22 @@ export interface SharedSettings {
 const detectedDensity = detectDensity()
 
 const isPalette = (value: string | null): value is PaletteId => PALETTE_IDS.some((id) => id === value)
-const isShape = (value: string | null): value is ShapeId => SHAPE_IDS.some((id) => id === value)
-
-/**
- * The page opens on the title written in particles, unless a link asks for a shape or
- * the visitor prefers reduced motion.
- */
-export function introRequested(): boolean {
-  return !REDUCED_MOTION && !new URLSearchParams(window.location.search).has('shape')
-}
 
 /** Reads shared settings from the query string, ignoring anything malformed. */
 export function readUrlSettings(): SharedSettings {
   const params = new URLSearchParams(window.location.search)
   const palette = params.get('palette')
   const turbulence = Number.parseFloat(params.get('turbulence') ?? '')
-  const shape = params.get('shape')
   const density = params.get('particles')
   return {
     density: isDensity(density) ? density : detectedDensity,
-    shape: isShape(shape) ? shape : introRequested() ? 'title' : 'fluid',
     palette: isPalette(palette) ? palette : DEFAULT_PALETTE,
     turbulence: Number.isFinite(turbulence) ? clampTurbulence(turbulence) : DEFAULT_TURBULENCE,
   }
 }
 
 /** Rewrites the query string in place; defaults are omitted to keep links short. */
-export function writeUrlSettings({ palette, turbulence, shape, density }: SharedSettings): void {
+export function writeUrlSettings({ palette, turbulence, density }: SharedSettings): void {
   const params = new URLSearchParams(window.location.search)
   const assign = (key: string, value: string, fallback: string) => {
     if (value === fallback) params.delete(key)
@@ -50,7 +36,6 @@ export function writeUrlSettings({ palette, turbulence, shape, density }: Shared
   }
   assign('palette', palette, DEFAULT_PALETTE)
   assign('turbulence', turbulence.toFixed(2), DEFAULT_TURBULENCE.toFixed(2))
-  assign('shape', shape, 'fluid')
   assign('particles', density, detectedDensity)
   const query = params.toString()
   const url = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`

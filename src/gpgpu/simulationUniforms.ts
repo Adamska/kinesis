@@ -23,8 +23,6 @@ export function createVelocityUniforms() {
     uTurbulence: { value: 1 },
     uForceVelocity: { value: vectors() },
     uForceAxis: { value: vectors() },
-    uTargets: { value: null as Texture | null },
-    uMorph: { value: 0 },
     uMask: { value: null as Texture | null },
     uMaskStrength: { value: 0 },
     uMaskScale: { value: new Vector2(1, 1) },
@@ -66,8 +64,8 @@ export function bindObstacle(uniforms: VelocityUniforms, obstacle: BodyObstacle 
   uniforms.uScreenAspect.value = obstacle.screenAspect
 }
 
-/** A single texel with w = 0: no particle is held by any shape. */
-export function createEmptyTargets(): DataTexture {
+/** A single black texel, bound wherever a sampler has nothing to read. */
+export function createEmptyTexture(): DataTexture {
   const texture = new DataTexture(new Float32Array(4), 1, 1, RGBAFormat, FloatType)
   texture.needsUpdate = true
   return texture

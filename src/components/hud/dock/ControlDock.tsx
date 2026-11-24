@@ -3,7 +3,6 @@ import { GestureIndicator } from '../GestureIndicator'
 import { AudioControls } from './AudioControls'
 import { DensitySwitch } from './DensitySwitch'
 import { DockCell, DockToggle } from './DockCell'
-import { FormSwitch } from './FormSwitch'
 import { LookControls } from './LookControls'
 import { PaletteSwitch, TrackingPill, TurbulenceControl } from './PrimaryControls'
 import { RecordToggle } from './RecordToggle'
@@ -24,9 +23,6 @@ export function ControlDock() {
       className="pointer-events-auto flex w-full max-w-sm flex-col items-center pl-px pt-px text-[10px] uppercase tracking-[0.16em] sm:w-auto sm:max-w-full"
     >
       <div className={`${ROW} ${expanded ? 'flex' : 'hidden'} sm:flex`}>
-        <DockCell label="Form">
-          <FormSwitch />
-        </DockCell>
         <DockCell>
           <LookControls />
         </DockCell>

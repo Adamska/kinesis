@@ -3,7 +3,6 @@ import { toggleMic, toggleSound } from '../audio/audioSession'
 import { toggleRecording } from '../capture/clipRecorder'
 import { PALETTE_IDS } from '../config/palettes'
 import { clampTurbulence } from '../config/settings'
-import { SHAPE_IDS } from '../gpgpu/shapeTargets'
 import { simulationBridge, useSimulationStore } from '../store/useSimulationStore'
 import { toggleSilhouette, toggleTracking } from '../vision/trackingSession'
 
@@ -33,15 +32,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
     label: `1 - ${PALETTE_IDS.length}`,
     action: 'Palette',
     run: (key) => useSimulationStore.getState().setPalette(PALETTE_IDS[Number(key) - 1]),
-  },
-  {
-    keys: ['s'],
-    label: 'S',
-    action: 'Next form',
-    run: () => {
-      const { shape, setShape } = useSimulationStore.getState()
-      setShape(SHAPE_IDS[(SHAPE_IDS.indexOf(shape) + 1) % SHAPE_IDS.length])
-    },
   },
   { keys: [' '], label: 'Space', action: 'Shockwave', run: () => (simulationBridge.burstRequested = true) },
   { keys: ['[', ']'], label: '[ ]', action: 'Turbulence', run: (key) => nudgeTurbulence(key === ']' ? 1 : -1) },

@@ -4,7 +4,6 @@ import type { DensityId } from '../config/density'
 import { REDUCED_MOTION } from '../config/motion'
 import type { PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
-import type { ShapeId } from '../gpgpu/shapeTargets'
 import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from '../vision/handTopology'
 import { MASK_HEIGHT, MASK_WIDTH } from '../vision/silhouetteMask'
 import type { TrackerStage } from '../vision/HandTracker'
@@ -95,7 +94,6 @@ export const simulationBridge: SimulationBridge = {
 interface SimulationStore {
   palette: PaletteId
   turbulence: number
-  shape: ShapeId
   density: DensityId
   vision: VisionStatus
   visionStage: TrackerStage
@@ -108,7 +106,6 @@ interface SimulationStore {
   silhouette: SilhouetteStatus
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
-  setShape: (shape: ShapeId) => void
   setDensity: (density: DensityId) => void
   setVision: (vision: VisionStatus) => void
   setVisionStage: (visionStage: TrackerStage) => void
@@ -134,7 +131,6 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   silhouette: 'off',
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
-  setShape: (shape) => set({ shape }),
   setDensity: (density) => set({ density }),
   setVision: (vision) => set({ vision }),
   setVisionStage: (visionStage) => set({ visionStage }),
