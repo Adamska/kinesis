@@ -127,6 +127,7 @@ Two full-screen triangles per frame, one fragment per particle. The time step is
 - Depth of field follows a thin-lens model: the circle of confusion grows with distance from the focal plane, and defocused particles become wider, dimmer bokeh discs. Focus rests on the center of the cloud and racks to the point a user steers.
 - Color comes from an Inigo Quilez cosine palette indexed by speed and stored energy. Switching palettes interpolates the coefficients.
 - Blending is additive into a half-float buffer, so overlapping particles accumulate past 1.0. Denser budgets draw each particle dimmer and smaller to keep the overall exposure constant.
+- Behind the cloud, a faint radial glow takes the mid tone of the current palette and follows palette changes. The final pass is dithered, so the very dark gradient does not band at 8 bits.
 
 ### Post-processing
 
