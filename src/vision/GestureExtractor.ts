@@ -1,6 +1,6 @@
-import { MathUtils } from 'three'
-import { simulationBridge } from '../store/useSimulationStore'
-import { Landmark } from './handTopology'
+import { MathUtils, Vector3 } from 'three'
+import type { TrackedHand } from '../store/useSimulationStore'
+import { Landmark, LANDMARK_STRIDE } from './handTopology'
 import { OneEuroFilter } from './OneEuroFilter'
 
 const REACH_GAIN = 1.4
@@ -16,9 +16,15 @@ const FAR_PALM = 0.12
 
 const BURST_WINDOW_MS = 380
 const BURST_COOLDOWN_MS = 650
+const NORMAL_RATE = 10
+
+const wristToIndex = new Vector3()
+const wristToPinky = new Vector3()
+const normal = new Vector3()
 
 /** Turns raw hand landmarks into the smoothed, distance-invariant metrics the simulation reads. */
 export class GestureExtractor {
+  private readonly hand: TrackedHand
   private readonly x = new OneEuroFilter(1.2, 4)
   private readonly y = new OneEuroFilter(1.2, 4)
   private readonly depth = new OneEuroFilter(0.5, 0.5)
@@ -26,8 +32,12 @@ export class GestureExtractor {
   private closedAt = Number.NEGATIVE_INFINITY
   private burstAt = Number.NEGATIVE_INFINITY
 
+  constructor(hand: TrackedHand) {
+    this.hand = hand
+  }
+
   update(landmarks: Float32Array | null, aspect: number, now: number): void {
-    const hand = simulationBridge.hand
+    const hand = this.hand
     if (!landmarks) {
       // Motion blur drops detection for a frame or two during fast moves. Holding the
       // last pose briefly keeps the force field from jumping back to another source.
@@ -37,8 +47,8 @@ export class GestureExtractor {
 
     // Landmarks are normalized per axis; scaling x by the aspect ratio makes image-plane
     // distances isotropic. Dividing by palm length makes every metric distance-invariant.
-    const span = (a: number, b: number) =>
-      Math.hypot((landmarks[a * 2] - landmarks[b * 2]) * aspect, landmarks[a * 2 + 1] - landmarks[b * 2 + 1])
+    const at = (index: number, axis: number) => landmarks[index * LANDMARK_STRIDE + axis]
+    const span = (a: number, b: number) => Math.hypot((at(a, 0) - at(b, 0)) * aspect, at(a, 1) - at(b, 1))
 
     const palm = Math.max(span(Landmark.WRIST, Landmark.MIDDLE_MCP), 1e-4)
     const pinchGap = span(Landmark.THUMB_TIP, Landmark.INDEX_TIP) / palm
@@ -62,8 +72,8 @@ export class GestureExtractor {
 
     // Mirror x so the cloud follows the hand like a reflection, and amplify reach so the
     // edges of the volume are comfortable to hit without leaving the camera frame.
-    const centerX = landmarks[Landmark.WRIST * 2] + landmarks[Landmark.MIDDLE_MCP * 2]
-    const centerY = landmarks[Landmark.WRIST * 2 + 1] + landmarks[Landmark.MIDDLE_MCP * 2 + 1]
+    const centerX = at(Landmark.WRIST, 0) + at(Landmark.MIDDLE_MCP, 0)
+    const centerY = at(Landmark.WRIST, 1) + at(Landmark.MIDDLE_MCP, 1)
     const x = MathUtils.clamp((1 - centerX) * REACH_GAIN, -1, 1)
     const y = MathUtils.clamp((1 - centerY) * REACH_GAIN, -1, 1)
     const depth = MathUtils.clamp(MathUtils.mapLinear(palm, FAR_PALM, NEAR_PALM, -1, 1), -1, 1)
@@ -75,6 +85,7 @@ export class GestureExtractor {
     hand.depth = this.depth.filter(depth, dt)
     hand.pinch = dt > 0 ? MathUtils.lerp(hand.pinch, pinch, 1 - Math.exp(-dt * PINCH_RATE)) : pinch
 
+    this.updatePalmNormal(at, aspect, dt)
     hand.landmarks.set(landmarks)
     hand.aspect = aspect
     hand.visible = true
@@ -82,8 +93,32 @@ export class GestureExtractor {
     this.lastSampleAt = now
   }
 
+  /**
+   * Palm normal from the wrist and the index and pinky knuckles. Image x and the
+   * relative depth z are both normalized by frame width, y by frame height; scaling x
+   * and z by the aspect ratio makes the axes isotropic. Negating all three converts
+   * mirrored image space (y down, z away) into view space (y up, z toward the viewer).
+   */
+  private updatePalmNormal(at: (index: number, axis: number) => number, aspect: number, dt: number): void {
+    const toView = (index: number, out: Vector3) =>
+      out.set(
+        (at(Landmark.WRIST, 0) - at(index, 0)) * aspect,
+        at(Landmark.WRIST, 1) - at(index, 1),
+        (at(Landmark.WRIST, 2) - at(index, 2)) * aspect,
+      )
+    toView(Landmark.INDEX_MCP, wristToIndex)
+    toView(Landmark.PINKY_MCP, wristToPinky)
+    normal.crossVectors(wristToIndex, wristToPinky)
+    if (normal.lengthSq() < 1e-10) return
+    normal.normalize()
+    const palm = this.hand.palmNormal
+    if (dt > 0) palm.lerp(normal, 1 - Math.exp(-dt * NORMAL_RATE))
+    if (dt <= 0 || palm.lengthSq() < 1e-4) palm.copy(normal)
+    palm.normalize()
+  }
+
   release(): void {
-    simulationBridge.hand.visible = false
+    this.hand.visible = false
     this.x.reset()
     this.y.reset()
     this.depth.reset()

@@ -1,7 +1,8 @@
+import { Vector3 } from 'three'
 import { create } from 'zustand'
 import { DEFAULT_PALETTE, type PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
-import { LANDMARK_COUNT } from '../vision/handTopology'
+import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from '../vision/handTopology'
 import type { TrackerStage } from '../vision/HandTracker'
 
 export type InputSource = 'autonomous' | 'pointer' | 'tracking'
@@ -18,7 +19,9 @@ export interface TrackedHand {
   depth: number
   pinch: number
   burstPending: boolean
-  /** Interleaved xy image coordinates of the 21 landmarks, each in [0, 1]. */
+  /** Palm normal in view space (x right, y up, z toward the viewer), mirrored like x. */
+  palmNormal: Vector3
+  /** Interleaved xyz of the 21 landmarks: x and y in [0, 1] image space, z relative depth. */
   landmarks: Float32Array
   /** Width over height of the camera frame the landmarks refer to. */
   aspect: number
@@ -33,7 +36,7 @@ export interface Telemetry {
 }
 
 export interface SimulationBridge extends ForceField {
-  hand: TrackedHand
+  hands: TrackedHand[]
   telemetry: Telemetry
 }
 
@@ -44,7 +47,7 @@ export interface SimulationBridge extends ForceField {
  */
 export const simulationBridge: SimulationBridge = {
   points: Array.from({ length: FORCE_POINT_COUNT }, (_, index) => createForcePoint(index)),
-  hand: {
+  hands: Array.from({ length: MAX_HANDS }, () => ({
     visible: false,
     seenAt: 0,
     x: 0,
@@ -52,9 +55,10 @@ export const simulationBridge: SimulationBridge = {
     depth: 0,
     pinch: 0,
     burstPending: false,
-    landmarks: new Float32Array(LANDMARK_COUNT * 2),
+    palmNormal: new Vector3(0, 0, 1),
+    landmarks: new Float32Array(LANDMARK_COUNT * LANDMARK_STRIDE),
     aspect: 4 / 3,
-  },
+  })),
   telemetry: { fps: 0, inferenceMs: 0, downloadedBytes: 0, source: 'autonomous', gesture: 'flow' },
 }
 

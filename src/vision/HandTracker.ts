@@ -1,5 +1,6 @@
 import { simulationBridge } from '../store/useSimulationStore'
 import { GestureExtractor } from './GestureExtractor'
+import { assignHandSlots } from './handSlots'
 import type { LoadStage, WorkerRequest, WorkerResponse } from './landmarkProtocol'
 
 export type TrackerStage = 'permission' | LoadStage
@@ -28,7 +29,7 @@ function openCamera(): Promise<MediaStream> {
 export class HandTracker {
   private readonly video = document.createElement('video')
   private readonly worker = new Worker(new URL('./landmark.worker.ts', import.meta.url), { type: 'module' })
-  private readonly gestures = new GestureExtractor()
+  private readonly gestures = simulationBridge.hands.map((hand) => new GestureExtractor(hand))
   private readonly events: TrackerEvents
   private stream: MediaStream | null = null
   private loadStage: LoadStage = 'download'
@@ -73,7 +74,7 @@ export class HandTracker {
     this.stream?.getTracks().forEach((track) => track.stop())
     this.stream = null
     this.video.srcObject = null
-    this.gestures.release()
+    this.gestures.forEach((gesture) => gesture.release())
     simulationBridge.telemetry.inferenceMs = 0
     simulationBridge.telemetry.downloadedBytes = 0
   }
@@ -88,7 +89,7 @@ export class HandTracker {
         } else if (data.type === 'progress') simulationBridge.telemetry.downloadedBytes = data.bytes
         else if (data.type === 'ready') resolve()
         else if (data.type === 'error') reject(new Error(data.message))
-        else this.receive(data.landmarks, data.inferenceMs)
+        else this.receive(data.hands, data.inferenceMs)
       }
       this.send({ type: 'init' })
     })
@@ -121,12 +122,15 @@ export class HandTracker {
     )
   }
 
-  private receive(landmarks: Float32Array | null, inferenceMs: number): void {
+  private receive(hands: Float32Array[], inferenceMs: number): void {
     this.awaitingResult = false
     if (this.disposed) return
     const telemetry = simulationBridge.telemetry
     telemetry.inferenceMs += (inferenceMs - telemetry.inferenceMs) * 0.2
     const aspect = this.video.videoWidth / this.video.videoHeight || DEFAULT_ASPECT
-    this.gestures.update(landmarks, aspect, performance.now())
+    const now = performance.now()
+    assignHandSlots(hands, simulationBridge.hands).forEach((landmarks, slot) => {
+      this.gestures[slot].update(landmarks, aspect, now)
+    })
   }
 }

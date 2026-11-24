@@ -4,12 +4,15 @@ const POINTER_GUIDE = [
   ['Move', 'Stir the field'],
   ['Hold', 'Singularity'],
   ['Release', 'Shockwave'],
+  ['Two fingers', 'Twin vortices'],
 ] as const
 
 const TRACKING_GUIDE = [
   ['Move hand', 'Drag the fluid'],
   ['Pinch', 'Singularity'],
   ['Snap open', 'Shockwave'],
+  ['Tilt palm', 'Spin axis'],
+  ['Two hands', 'Twin vortices'],
 ] as const
 
 export function InteractionGuide() {

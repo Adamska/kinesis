@@ -18,7 +18,10 @@ const TRACKING_LABELS: Record<Gesture, string> = {
 
 function describeState(): { label: string; gesture: Gesture } {
   const { source, gesture } = simulationBridge.telemetry
-  if (source === 'tracking') return { label: TRACKING_LABELS[gesture], gesture }
+  if (source === 'tracking') {
+    const twin = simulationBridge.hands.every((hand) => hand.visible)
+    return { label: twin ? TRACKING_LABELS[gesture].replace('Tracking', 'Tracking x2') : TRACKING_LABELS[gesture], gesture }
+  }
   if (source === 'pointer') return { label: POINTER_LABELS[gesture], gesture }
   const searching = useSimulationStore.getState().vision === 'active'
   return { label: searching ? 'Tracking: Searching' : 'Autonomous flow', gesture: 'flow' }

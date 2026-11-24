@@ -1,12 +1,17 @@
 export const LANDMARK_COUNT = 21
+/** Floats per landmark in packed arrays: x and y normalized to the frame, z relative depth. */
+export const LANDMARK_STRIDE = 3
+export const MAX_HANDS = 2
 
 export const Landmark = {
   WRIST: 0,
   THUMB_TIP: 4,
+  INDEX_MCP: 5,
   INDEX_TIP: 8,
   MIDDLE_MCP: 9,
   MIDDLE_TIP: 12,
   RING_TIP: 16,
+  PINKY_MCP: 17,
   PINKY_TIP: 20,
 } as const
 

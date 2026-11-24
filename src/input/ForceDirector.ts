@@ -12,7 +12,7 @@ const SHOCKWAVE_DECAY = 3.2
 const SHOCKWAVE_FLOOR = 0.004
 const MAX_HAND_SPEED = 7
 const HAND_STALE_MS = 400
-const HAND_DEPTH_RANGE = 0.5
+const HAND_DEPTH_RANGE = 1.1
 const HAND_REACH = 2.2
 
 // A hand sweeps a much shorter world distance than a pointer flick for the same
@@ -60,6 +60,7 @@ export class ForceDirector {
     burst: false,
     axis: null,
   }))
+  private readonly axes = Array.from({ length: FORCE_POINT_COUNT }, () => new Vector3())
   private readonly wasActive: boolean[] = Array.from({ length: FORCE_POINT_COUNT }, () => false)
 
   update(delta: number, camera: Camera): void {
@@ -87,21 +88,28 @@ export class ForceDirector {
 
   /** Fills the per-point inputs from the highest-priority live source. */
   private gather(now: number, camera: Camera): InputSource {
-    const hand = simulationBridge.hand
-    if (hand.visible && now - hand.seenAt < HAND_STALE_MS) {
+    const hands = simulationBridge.hands
+    const live = (index: number) => hands[index].visible && now - hands[index].seenAt < HAND_STALE_MS
+    if (hands.some((_, index) => live(index))) {
       // The focal plane spans distance / P00 by distance / P11 world units from its
       // center. Scaling by HAND_REACH over that extent keeps a fully extended hand
       // inside the cloud instead of out at the edge of a wide viewport.
       const { elements } = camera.projectionMatrix
       const distance = camera.position.length()
-      const x = hand.x * Math.min(1, (HAND_REACH * elements[0]) / distance)
-      const y = hand.y * Math.min(1, (HAND_REACH * elements[5]) / distance)
-      const input = this.inputs[0]
-      projectToFocalPlane(camera, x, y, hand.depth * HAND_DEPTH_RANGE, input.target)
-      input.active = true
-      input.pinch = hand.pinch
-      input.burst = hand.burstPending
-      hand.burstPending = false
+      const reachX = Math.min(1, (HAND_REACH * elements[0]) / distance)
+      const reachY = Math.min(1, (HAND_REACH * elements[5]) / distance)
+      hands.forEach((hand, index) => {
+        if (!live(index)) return
+        const input = this.inputs[index]
+        projectToFocalPlane(camera, hand.x * reachX, hand.y * reachY, hand.depth * HAND_DEPTH_RANGE, input.target)
+        input.active = true
+        input.pinch = hand.pinch
+        input.burst = hand.burstPending
+        hand.burstPending = false
+        // The palm normal is measured in view space; the camera's rotation carries it
+        // into the world, so tilting the hand tilts the singularity's disc.
+        input.axis = this.axes[index].copy(hand.palmNormal).applyQuaternion(camera.quaternion)
+      })
       return 'tracking'
     }
 

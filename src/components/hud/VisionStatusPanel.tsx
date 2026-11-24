@@ -83,7 +83,7 @@ function AwaitingHandPanel() {
   const [acquired, setAcquired] = useState(false)
 
   useTicker(() => {
-    if (simulationBridge.hand.visible) setAcquired(true)
+    if (simulationBridge.hands.some((hand) => hand.visible)) setAcquired(true)
   }, 150)
 
   if (acquired) return null
@@ -91,8 +91,8 @@ function AwaitingHandPanel() {
     <section role="status" aria-live="polite" className={`${frame} border-signal/40 px-4 py-4`}>
       <p className="text-[12px] text-signal">Tracking online</p>
       <p className="mt-2 leading-relaxed text-white/60 normal-case tracking-[0.04em]">
-        Raise one hand in front of the camera. Move it to drag the fluid, pinch thumb and index to gather it,
-        then snap your hand open to release a shockwave.
+        Raise one or both hands in front of the camera. Move to drag the fluid, pinch thumb and index to
+        gather it, tilt your palm to turn the vortex, then snap your hand open to release a shockwave.
       </p>
     </section>
   )

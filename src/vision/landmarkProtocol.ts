@@ -7,5 +7,5 @@ export type WorkerResponse =
   | { type: 'progress'; bytes: number }
   | { type: 'ready' }
   | { type: 'error'; message: string }
-  /** Interleaved xy image coordinates of the 21 landmarks, or null when no hand is found. */
-  | { type: 'result'; landmarks: Float32Array | null; inferenceMs: number }
+  /** One array per detected hand: interleaved xyz of the 21 landmarks in image space. */
+  | { type: 'result'; hands: Float32Array[]; inferenceMs: number }

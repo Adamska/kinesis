@@ -1,5 +1,5 @@
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision'
-import { LANDMARK_COUNT } from './handTopology'
+import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from './handTopology'
 import type { WorkerRequest, WorkerResponse } from './landmarkProtocol'
 
 // The WASM runtime must match the installed @mediapipe/tasks-vision version exactly.
@@ -62,7 +62,7 @@ async function initialize(): Promise<void> {
         baseOptions: { modelAssetBuffer, delegate },
         canvas: new OffscreenCanvas(1, 1),
         runningMode: 'VIDEO',
-        numHands: 1,
+        numHands: MAX_HANDS,
         minHandDetectionConfidence: 0.5,
         minHandPresenceConfidence: 0.4,
         minTrackingConfidence: 0.4,
@@ -80,21 +80,24 @@ async function initialize(): Promise<void> {
 
 function detect(bitmap: ImageBitmap): void {
   const startedAt = performance.now()
-  let landmarks: Float32Array | null = null
+  const hands: Float32Array[] = []
   try {
-    const hand = landmarker?.detectForVideo(bitmap, startedAt).landmarks[0]
-    if (hand && hand.length >= LANDMARK_COUNT) {
-      landmarks = new Float32Array(LANDMARK_COUNT * 2)
+    const result = landmarker?.detectForVideo(bitmap, startedAt)
+    for (const hand of result?.landmarks ?? []) {
+      if (hand.length < LANDMARK_COUNT) continue
+      const packed = new Float32Array(LANDMARK_COUNT * LANDMARK_STRIDE)
       for (let index = 0; index < LANDMARK_COUNT; index++) {
-        landmarks[index * 2] = hand[index].x
-        landmarks[index * 2 + 1] = hand[index].y
+        packed[index * LANDMARK_STRIDE] = hand[index].x
+        packed[index * LANDMARK_STRIDE + 1] = hand[index].y
+        packed[index * LANDMARK_STRIDE + 2] = hand[index].z
       }
+      hands.push(packed)
     }
   } finally {
     bitmap.close()
   }
   const inferenceMs = performance.now() - startedAt
-  scope.postMessage({ type: 'result', landmarks, inferenceMs }, landmarks ? [landmarks.buffer] : [])
+  scope.postMessage({ type: 'result', hands, inferenceMs }, hands.map((hand) => hand.buffer))
 }
 
 scope.addEventListener('message', ({ data }) => {

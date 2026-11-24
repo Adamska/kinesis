@@ -1,13 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { simulationBridge } from '../../store/useSimulationStore'
-import { FINGERTIPS, HAND_BONES, Landmark, LANDMARK_COUNT } from '../../vision/handTopology'
+import { simulationBridge, type TrackedHand } from '../../store/useSimulationStore'
+import { FINGERTIPS, HAND_BONES, Landmark, LANDMARK_COUNT, LANDMARK_STRIDE } from '../../vision/handTopology'
 
 const SIGNAL = '215 244 255'
 const MAX_PIXEL_RATIO = 2
 
-function drawSkeleton(context: CanvasRenderingContext2D, width: number, height: number): void {
-  const { visible, landmarks, pinch, aspect } = simulationBridge.hand
-  context.clearRect(0, 0, width, height)
+function drawSkeleton(context: CanvasRenderingContext2D, hand: TrackedHand, width: number, height: number): void {
+  const { visible, landmarks, pinch, aspect } = hand
   if (!visible) return
 
   // Contain-fit the camera frame inside the preview, mirrored on x so the skeleton
@@ -16,8 +15,8 @@ function drawSkeleton(context: CanvasRenderingContext2D, width: number, height: 
   const frameHeight = frameWidth / aspect
   const left = (width - frameWidth) / 2
   const top = (height - frameHeight) / 2
-  const px = (index: number) => left + (1 - landmarks[index * 2]) * frameWidth
-  const py = (index: number) => top + landmarks[index * 2 + 1] * frameHeight
+  const px = (index: number) => left + (1 - landmarks[index * LANDMARK_STRIDE]) * frameWidth
+  const py = (index: number) => top + landmarks[index * LANDMARK_STRIDE + 1] * frameHeight
 
   context.lineWidth = 1
   context.strokeStyle = 'rgb(255 255 255 / 0.5)'
@@ -42,7 +41,7 @@ function drawSkeleton(context: CanvasRenderingContext2D, width: number, height: 
   }
 }
 
-/** Corner wireframe of the tracked 21-point hand, redrawn on its own animation frame loop. */
+/** Corner wireframe of the tracked 21-point hands, redrawn on its own animation frame loop. */
 export function HandSkeletonPreview() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const statusRef = useRef<HTMLSpanElement>(null)
@@ -64,9 +63,12 @@ export function HandSkeletonPreview() {
         canvas.height = Math.round(height * pixelRatio)
       }
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-      drawSkeleton(context, width, height)
+      context.clearRect(0, 0, width, height)
+      const { hands } = simulationBridge
+      for (const hand of hands) drawSkeleton(context, hand, width, height)
 
-      const status = simulationBridge.hand.visible ? 'Locked' : 'No hand'
+      const count = hands.filter((hand) => hand.visible).length
+      const status = count === 0 ? 'No hand' : count === 1 ? 'Locked' : 'Locked x2'
       if (statusRef.current && statusRef.current.textContent !== status) {
         statusRef.current.textContent = status
       }
@@ -78,7 +80,7 @@ export function HandSkeletonPreview() {
   return (
     <figure className="w-44 border border-hairline bg-void/65 text-[10px] uppercase tracking-[0.16em] backdrop-blur-md sm:w-60">
       <figcaption className="flex justify-between border-b border-hairline px-2.5 py-1.5">
-        <span className="text-white/40">Hand // 21 pt</span>
+        <span className="text-white/40">Hands // 21 pt</span>
         <span ref={statusRef} className="text-white/85">
           No hand
         </span>
