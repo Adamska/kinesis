@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSimulationStore } from '../../store/useSimulationStore'
-import { ControlDock } from './ControlDock'
+import { ControlDock } from './dock/ControlDock'
 import { HandSkeletonPreview } from './HandSkeletonPreview'
 import { InteractionGuide } from './InteractionGuide'
 import { ShortcutSheet } from './ShortcutSheet'

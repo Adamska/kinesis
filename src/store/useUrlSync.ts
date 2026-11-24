@@ -9,7 +9,11 @@ export function useUrlSync(): void {
   useEffect(() => {
     let timer = 0
     const unsubscribe = useSimulationStore.subscribe((state, previous) => {
-      if (state.palette === previous.palette && state.turbulence === previous.turbulence) return
+      const changed =
+        state.palette !== previous.palette ||
+        state.turbulence !== previous.turbulence ||
+        state.shape !== previous.shape
+      if (!changed) return
       window.clearTimeout(timer)
       timer = window.setTimeout(() => writeUrlSettings(state), WRITE_DELAY_MS)
     })

@@ -6,8 +6,11 @@ uniform float uTurbulence;
 uniform vec3 uForcePosition[FORCE_COUNT];
 uniform vec3 uForceVelocity[FORCE_COUNT];
 uniform vec3 uForceAxis[FORCE_COUNT];
-// x = pinch strength, y = shockwave impulse.
-uniform vec2 uForceDrive[FORCE_COUNT];
+// x = pinch strength, y = shockwave impulse, z = presence of a user steering it.
+uniform vec3 uForceDrive[FORCE_COUNT];
+// Shape morph: per-texel target positions and the global strength of the pull.
+uniform sampler2D uTargets;
+uniform float uMorph;
 
 varying vec2 vUv;
 
@@ -31,6 +34,11 @@ const float SHOCK_GAIN = 14.0;
 const float DRAG_RADIUS = 0.75;
 const float DRAG_GAIN = 1.6;
 
+const float MORPH_STIFFNESS = 8.0;
+// Critical damping for a unit mass: c = 2 sqrt(k).
+const float MORPH_DAMPING = 5.66;
+const float CARVE_RADIUS = 0.55;
+
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -53,18 +61,29 @@ void main() {
   // carrier flow.
   float wells[FORCE_COUNT];
   float wellTotal = 0.0;
+  float carve = 0.0;
+  float blast = 0.0;
   for (int i = 0; i < FORCE_COUNT; i++) {
     vec3 offset = location - uForcePosition[i];
-    wells[i] = uForceDrive[i].x * exp(-dot(offset, offset) / (PINCH_RADIUS * PINCH_RADIUS));
+    float d2 = dot(offset, offset);
+    wells[i] = uForceDrive[i].x * exp(-d2 / (PINCH_RADIUS * PINCH_RADIUS));
     wellTotal += wells[i];
+    carve += uForceDrive[i].z * exp(-d2 / (CARVE_RADIUS * CARVE_RADIUS));
+    blast = max(blast, uForceDrive[i].y);
   }
   wellTotal = min(wellTotal, 1.0);
+
+  // How firmly this particle is held by the current shape. A force point carves a
+  // hole through it, a pinch tears matter away and a shockwave releases the whole
+  // shape for as long as the blast lasts; the spring then pulls everything back.
+  vec4 goal = texture2D(uTargets, vUv);
+  float hold = uMorph * goal.w * (1.0 - min(carve, 1.0)) * (1.0 - wellTotal) * (1.0 - 0.95 * blast);
 
   // Stokes drag toward the carrier flow. Each particle has its own response time, so
   // the cloud behaves like inertial tracers and concentrates into filaments between
   // vortices. Inside a pinch well the coupling loosens so orbits keep their speed.
   float responseTime = mix(0.25, 0.7, hash(vUv));
-  float coupling = (1.0 - exp(-uDelta / responseTime)) * (1.0 - 0.92 * wellTotal);
+  float coupling = (1.0 - exp(-uDelta / responseTime)) * (1.0 - 0.92 * wellTotal) * (1.0 - 0.85 * hold);
   velocity += (flow - velocity) * coupling;
 
   vec3 acceleration = vec3(0.0);
@@ -73,7 +92,10 @@ void main() {
   // incompressible while pulling escapees back with a spring force.
   float radius = length(location);
   float excess = max(radius - REST_RADIUS, 0.0);
-  acceleration -= location * (CONFINEMENT_STIFFNESS * excess / max(radius, 1e-4));
+  acceleration -= location * (CONFINEMENT_STIFFNESS * excess / max(radius, 1e-4)) * (1.0 - hold);
+
+  // Critically damped spring toward the shape: it settles without ringing.
+  acceleration += (MORPH_STIFFNESS * (goal.xyz - location) - MORPH_DAMPING * velocity) * hold;
 
   for (int i = 0; i < FORCE_COUNT; i++) {
     vec3 toParticle = location - uForcePosition[i];

@@ -4,8 +4,6 @@ import {
   OrthographicCamera,
   Scene,
   ShaderMaterial,
-  Vector2,
-  Vector3,
   type BufferGeometry,
   type IUniform,
   type Texture,
@@ -17,8 +15,17 @@ import positionFragment from '../shaders/position.frag?raw'
 import seedFragment from '../shaders/seed.frag?raw'
 import simulationVertex from '../shaders/simulation.vert?raw'
 import velocityFragment from '../shaders/velocity.frag?raw'
-import { FORCE_POINT_COUNT, type ForceField } from './forceField'
+import type { ForceField } from './forceField'
 import { createFullscreenTriangle, createStateTarget } from './primitives'
+import {
+  bindForceMotion,
+  bindForces,
+  createEmptyTargets,
+  createForceUniforms,
+  createVelocityUniforms,
+  FORCE_DEFINES,
+  type ForceUniforms,
+} from './simulationUniforms'
 import { createSeedState } from './seedState'
 
 export const SIMULATION_SIZE = 320
@@ -31,17 +38,14 @@ interface PingPong {
   write: WebGLRenderTarget
 }
 
-const vectors = <T>(create: () => T): T[] => Array.from({ length: FORCE_POINT_COUNT }, create)
-
-const createForceUniforms = () => ({
-  uPosition: { value: null as Texture | null },
-  uVelocity: { value: null as Texture | null },
-  uDelta: { value: 0 },
-  uForcePosition: { value: vectors(() => new Vector3()) },
-  uForceDrive: { value: vectors(() => new Vector2()) },
-})
-
-const FORCE_DEFINES = { FORCE_COUNT: FORCE_POINT_COUNT }
+export interface SimulationInputs {
+  forces: ForceField
+  turbulence: number
+  /** Target positions of the active shape, or null when the field flows freely. */
+  targets: Texture | null
+  /** Strength of the pull toward the targets, from 0 to 1. */
+  morph: number
+}
 
 /*
  * State layout, one texel per particle on a size x size grid:
@@ -65,13 +69,8 @@ export class SimulationEngine {
   private readonly position: PingPong
   private readonly velocity: PingPong
   private readonly positionUniforms = createForceUniforms()
-  private readonly velocityUniforms = {
-    ...createForceUniforms(),
-    uTime: { value: 0 },
-    uTurbulence: { value: 1 },
-    uForceVelocity: { value: vectors(() => new Vector3()) },
-    uForceAxis: { value: vectors(() => new Vector3()) },
-  }
+  private readonly velocityUniforms = createVelocityUniforms()
+  private readonly emptyTargets = createEmptyTargets()
   private readonly positionPass: ShaderMaterial
   private readonly velocityPass: ShaderMaterial
   private elapsed = 0
@@ -100,19 +99,18 @@ export class SimulationEngine {
     return this.velocity.read.texture
   }
 
-  step(delta: number, forces: ForceField, turbulence: number): void {
+  step(delta: number, { forces, turbulence, targets, morph }: SimulationInputs): void {
     const dt = Math.min(delta, MAX_TIME_STEP)
     this.elapsed += dt
     const previousTarget = this.renderer.getRenderTarget()
 
     const velocity = this.velocityUniforms
     this.bindState(velocity, dt, forces)
+    bindForceMotion(velocity, forces)
     velocity.uTime.value = this.elapsed
     velocity.uTurbulence.value = turbulence
-    forces.points.forEach((point, index) => {
-      velocity.uForceVelocity.value[index].copy(point.velocity)
-      velocity.uForceAxis.value[index].copy(point.axis)
-    })
+    velocity.uTargets.value = targets ?? this.emptyTargets
+    velocity.uMorph.value = targets ? morph : 0
     this.render(this.velocityPass, this.velocity)
 
     // Semi-implicit Euler: positions integrate the velocity computed this frame,
@@ -130,22 +128,16 @@ export class SimulationEngine {
     }
     this.velocityPass.dispose()
     this.positionPass.dispose()
+    this.emptyTargets.dispose()
     this.geometry.dispose()
     this.scene.clear()
   }
 
-  private bindState(
-    uniforms: ReturnType<typeof createForceUniforms>,
-    dt: number,
-    forces: ForceField,
-  ): void {
+  private bindState(uniforms: ForceUniforms, dt: number, forces: ForceField): void {
     uniforms.uPosition.value = this.position.read.texture
     uniforms.uVelocity.value = this.velocity.read.texture
     uniforms.uDelta.value = dt
-    forces.points.forEach((point, index) => {
-      uniforms.uForcePosition.value[index].copy(point.position)
-      uniforms.uForceDrive.value[index].set(point.pinch, point.impulse)
-    })
+    bindForces(uniforms, forces)
   }
 
   private createPass(fragmentShader: string, uniforms: Record<string, IUniform>): ShaderMaterial {

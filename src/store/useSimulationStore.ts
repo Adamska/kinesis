@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { create } from 'zustand'
 import type { PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
+import type { ShapeId } from '../gpgpu/shapeTargets'
 import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from '../vision/handTopology'
 import type { TrackerStage } from '../vision/HandTracker'
 import { readUrlSettings } from './urlSettings'
@@ -74,6 +75,7 @@ export const simulationBridge: SimulationBridge = {
 interface SimulationStore {
   palette: PaletteId
   turbulence: number
+  shape: ShapeId
   vision: VisionStatus
   visionStage: TrackerStage
   showFeed: boolean
@@ -81,6 +83,7 @@ interface SimulationStore {
   shortcutsOpen: boolean
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
+  setShape: (shape: ShapeId) => void
   setVision: (vision: VisionStatus) => void
   setVisionStage: (visionStage: TrackerStage) => void
   toggleFeed: () => void
@@ -97,6 +100,7 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   shortcutsOpen: false,
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
+  setShape: (shape) => set({ shape }),
   setVision: (vision) => set({ vision }),
   setVisionStage: (visionStage) => set({ visionStage }),
   toggleFeed: () => set((state) => ({ showFeed: !state.showFeed })),

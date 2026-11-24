@@ -2,8 +2,8 @@ uniform sampler2D uPosition;
 uniform sampler2D uVelocity;
 uniform float uDelta;
 uniform vec3 uForcePosition[FORCE_COUNT];
-// x = pinch strength, y = shockwave impulse.
-uniform vec2 uForceDrive[FORCE_COUNT];
+// x = pinch strength, y = shockwave impulse, z = presence of a user steering it.
+uniform vec3 uForceDrive[FORCE_COUNT];
 
 varying vec2 vUv;
 

@@ -10,6 +10,7 @@ import {
   type Texture,
 } from 'three'
 import { PALETTES, type CosinePalette } from '../config/palettes'
+import { ShapeMorph } from '../gpgpu/ShapeMorph'
 import { SimulationEngine, SIMULATION_SIZE } from '../gpgpu/SimulationEngine'
 import { ForceDirector } from '../input/ForceDirector'
 import particleFragment from '../shaders/particle.frag?raw'
@@ -53,6 +54,7 @@ export function ParticleField() {
   const engineRef = useRef<SimulationEngine | null>(null)
   const frameTime = useRef(1 / 60)
   const director = useMemo(() => new ForceDirector(), [])
+  const morph = useMemo(() => new ShapeMorph(SIMULATION_SIZE), [])
 
   const { geometry, material, uniforms } = useMemo(() => {
     const uniforms = createParticleUniforms(PALETTES[useSimulationStore.getState().palette])
@@ -83,17 +85,20 @@ export function ParticleField() {
     () => () => {
       geometry.dispose()
       material.dispose()
+      morph.dispose()
     },
-    [geometry, material],
+    [geometry, material, morph],
   )
 
   useFrame((state, delta) => {
     const engine = engineRef.current
     if (!engine) return
-    const { palette, turbulence } = useSimulationStore.getState()
+    const { palette, turbulence, shape } = useSimulationStore.getState()
 
     director.update(delta, state.camera)
-    engine.step(delta, simulationBridge, turbulence)
+    morph.request(shape)
+    morph.update(delta)
+    engine.step(delta, { forces: simulationBridge, turbulence, targets: morph.targets, morph: morph.strength })
 
     uniforms.uPositions.value = engine.positionTexture
     uniforms.uVelocities.value = engine.velocityTexture
