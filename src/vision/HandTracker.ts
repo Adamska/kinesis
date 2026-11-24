@@ -1,7 +1,8 @@
 import { simulationBridge } from '../store/useSimulationStore'
 import { GestureExtractor } from './GestureExtractor'
 import { assignHandSlots } from './handSlots'
-import type { LoadStage, WorkerRequest, WorkerResponse } from './landmarkProtocol'
+import type { LoadStage } from './landmarkProtocol'
+import type { LandmarkWorker } from './LandmarkWorker'
 
 export type TrackerStage = 'permission' | LoadStage
 
@@ -21,18 +22,20 @@ function openCamera(): Promise<MediaStream> {
 }
 
 /**
- * Owns the camera stream and the landmark worker. Camera frames are taken from an
- * offscreen video as they are decoded and transferred to the worker, where MediaPipe
- * loads, compiles and runs. Neither startup nor inference ever occupies the main
- * thread, and results go straight into the simulation bridge without touching React.
+ * Owns the camera stream for one tracking session. Camera frames are taken from an
+ * offscreen video as they are decoded and transferred to the landmark worker, where
+ * MediaPipe runs. Neither startup nor inference ever occupies the main thread, and
+ * results go straight into the simulation bridge without touching React.
  */
 export class HandTracker {
-  private readonly video = document.createElement('video')
-  private readonly worker = new Worker(new URL('./landmark.worker.ts', import.meta.url), { type: 'module' })
+  readonly video = document.createElement('video')
+
+  private readonly worker: LandmarkWorker
   private readonly gestures = simulationBridge.hands.map((hand) => new GestureExtractor(hand))
   private readonly events: TrackerEvents
   private stream: MediaStream | null = null
-  private loadStage: LoadStage = 'download'
+  private cameraOpen = false
+  private detachStage: () => void
   private timer = 0
   private disposed = false
   private awaitingResult = false
@@ -40,19 +43,23 @@ export class HandTracker {
   private frameReady = false
   private lastVideoTime = -1
 
-  constructor(events: TrackerEvents) {
+  constructor(worker: LandmarkWorker, events: TrackerEvents) {
+    this.worker = worker
     this.events = events
+    this.detachStage = worker.onStage((stage) => this.cameraOpen && events.onStage(stage))
   }
 
   async start(): Promise<void> {
     this.events.onStage('permission')
-    // Permission prompt and model startup are independent, so they run concurrently.
+    // The permission prompt and the model, which may already be preloaded, are
+    // independent, so they are awaited together.
     const [camera, model] = await Promise.allSettled([
       openCamera().then((stream) => {
         this.stream = stream
-        this.events.onStage(this.loadStage)
+        this.cameraOpen = true
+        this.events.onStage(this.worker.stage)
       }),
-      this.loadModel(),
+      this.worker.ready,
     ])
     const failure = [camera, model].find((result) => result.status === 'rejected')
     if (failure || this.disposed) {
@@ -65,40 +72,24 @@ export class HandTracker {
     this.video.playsInline = true
     this.video.srcObject = this.stream
     await this.video.play()
-    this.worker.onerror = (event) => this.events.onFailure(event.error ?? event.message)
+    this.worker.attach(
+      (hands, inferenceMs) => this.receive(hands, inferenceMs),
+      (error) => this.events.onFailure(error),
+    )
     this.startSampling()
   }
 
   dispose(): void {
     this.disposed = true
     window.clearTimeout(this.timer)
-    this.worker.terminate()
+    this.detachStage()
+    this.worker.attach(null)
     this.stream?.getTracks().forEach((track) => track.stop())
     this.stream = null
     this.video.srcObject = null
     this.gestures.forEach((gesture) => gesture.release())
     simulationBridge.telemetry.inferenceMs = 0
     simulationBridge.telemetry.downloadedBytes = 0
-  }
-
-  private loadModel(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.worker.onerror = (event) => reject(event.error ?? new Error(event.message))
-      this.worker.onmessage = ({ data }: MessageEvent<WorkerResponse>) => {
-        if (data.type === 'stage') {
-          this.loadStage = data.stage
-          if (this.stream) this.events.onStage(data.stage)
-        } else if (data.type === 'progress') simulationBridge.telemetry.downloadedBytes = data.bytes
-        else if (data.type === 'ready') resolve()
-        else if (data.type === 'error') reject(new Error(data.message))
-        else this.receive(data.hands, data.inferenceMs)
-      }
-      this.send({ type: 'init' })
-    })
-  }
-
-  private send(request: WorkerRequest, transfer: Transferable[] = []): void {
-    this.worker.postMessage(request, transfer)
   }
 
   /**
@@ -143,7 +134,7 @@ export class HandTracker {
     createImageBitmap(video).then(
       (bitmap) => {
         if (this.disposed) bitmap.close()
-        else this.send({ type: 'frame', bitmap }, [bitmap])
+        else this.worker.detect(bitmap)
       },
       () => {
         this.awaitingResult = false

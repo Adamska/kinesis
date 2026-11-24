@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { PALETTE_IDS, PALETTES, paletteGradient } from '../../config/palettes'
 import { TURBULENCE_RANGE, useSimulationStore, type VisionStatus } from '../../store/useSimulationStore'
-import { toggleTracking } from '../../vision/trackingSession'
+import { preloadTracking, toggleTracking } from '../../vision/trackingSession'
 import { GestureIndicator } from './GestureIndicator'
 
 const VISION_LABELS: Record<VisionStatus, string> = {
@@ -82,6 +82,9 @@ function TrackingPill() {
       type="button"
       aria-pressed={vision === 'active'}
       onClick={toggleTracking}
+      // Intent to click is a good moment to start the model download.
+      onPointerEnter={() => void preloadTracking()}
+      onFocus={() => void preloadTracking()}
       className={`flex h-7 cursor-pointer items-center gap-2 rounded-full border px-3.5 uppercase transition-colors duration-200 ${
         engaged
           ? 'border-signal/60 text-signal hover:border-signal'
