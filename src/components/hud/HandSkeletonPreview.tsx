@@ -1,22 +1,48 @@
 import { useEffect, useRef } from 'react'
-import { simulationBridge, type TrackedHand } from '../../store/useSimulationStore'
+import { simulationBridge, useSimulationStore, type TrackedHand } from '../../store/useSimulationStore'
 import { FINGERTIPS, HAND_BONES, Landmark, LANDMARK_COUNT, LANDMARK_STRIDE } from '../../vision/handTopology'
+import { trackingVideo } from '../../vision/trackingSession'
 
 const SIGNAL = '215 244 255'
 const MAX_PIXEL_RATIO = 2
+const FEED_OPACITY = 0.32
+
+interface Frame {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/** Contain-fits a frame of the given aspect ratio inside the preview. */
+function fitFrame(aspect: number, width: number, height: number): Frame {
+  const frameWidth = Math.min(width, height * aspect)
+  const frameHeight = frameWidth / aspect
+  return { left: (width - frameWidth) / 2, top: (height - frameHeight) / 2, width: frameWidth, height: frameHeight }
+}
+
+/** Dimmed, desaturated camera image mirrored like the skeleton, so the hands line up. */
+function drawFeed(context: CanvasRenderingContext2D, width: number, height: number): void {
+  const video = trackingVideo()
+  if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth) return
+  const frame = fitFrame(video.videoWidth / video.videoHeight, width, height)
+  context.save()
+  context.globalAlpha = FEED_OPACITY
+  context.filter = 'grayscale(1) contrast(1.15)'
+  context.translate(frame.left + frame.width, frame.top)
+  context.scale(-1, 1)
+  context.drawImage(video, 0, 0, frame.width, frame.height)
+  context.restore()
+}
 
 function drawSkeleton(context: CanvasRenderingContext2D, hand: TrackedHand, width: number, height: number): void {
   const { visible, landmarks, pinch, aspect } = hand
   if (!visible) return
 
-  // Contain-fit the camera frame inside the preview, mirrored on x so the skeleton
-  // reads like a reflection of the user's hand.
-  const frameWidth = Math.min(width, height * aspect)
-  const frameHeight = frameWidth / aspect
-  const left = (width - frameWidth) / 2
-  const top = (height - frameHeight) / 2
-  const px = (index: number) => left + (1 - landmarks[index * LANDMARK_STRIDE]) * frameWidth
-  const py = (index: number) => top + landmarks[index * LANDMARK_STRIDE + 1] * frameHeight
+  // Mirrored on x so the skeleton reads like a reflection of the user's hand.
+  const frame = fitFrame(aspect, width, height)
+  const px = (index: number) => frame.left + (1 - landmarks[index * LANDMARK_STRIDE]) * frame.width
+  const py = (index: number) => frame.top + landmarks[index * LANDMARK_STRIDE + 1] * frame.height
 
   context.lineWidth = 1
   context.strokeStyle = 'rgb(255 255 255 / 0.5)'
@@ -42,6 +68,24 @@ function drawSkeleton(context: CanvasRenderingContext2D, hand: TrackedHand, widt
 }
 
 /** Corner wireframe of the tracked 21-point hands, redrawn on its own animation frame loop. */
+function FeedToggle() {
+  const showFeed = useSimulationStore((state) => state.showFeed)
+  const toggleFeed = useSimulationStore((state) => state.toggleFeed)
+
+  return (
+    <button
+      type="button"
+      aria-pressed={showFeed}
+      onClick={toggleFeed}
+      className={`pointer-events-auto absolute right-2 bottom-1.5 cursor-pointer uppercase transition-colors ${
+        showFeed ? 'text-signal' : 'text-white/40 hover:text-white/75'
+      }`}
+    >
+      <span className="text-white/35">[</span> Feed <span className="text-white/35">]</span>
+    </button>
+  )
+}
+
 export function HandSkeletonPreview() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const statusRef = useRef<HTMLSpanElement>(null)
@@ -64,6 +108,7 @@ export function HandSkeletonPreview() {
       }
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
       context.clearRect(0, 0, width, height)
+      if (useSimulationStore.getState().showFeed) drawFeed(context, width, height)
       const { hands } = simulationBridge
       for (const hand of hands) drawSkeleton(context, hand, width, height)
 
@@ -79,13 +124,16 @@ export function HandSkeletonPreview() {
 
   return (
     <figure className="w-44 border border-hairline bg-void/65 text-[10px] uppercase tracking-[0.16em] backdrop-blur-md sm:w-60">
-      <figcaption className="flex justify-between border-b border-hairline px-2.5 py-1.5">
+      <figcaption className="flex justify-between border-b border-hairline px-2.5 py-1.5 whitespace-nowrap">
         <span className="text-white/40">Hands // 21 pt</span>
         <span ref={statusRef} className="text-white/85">
           No hand
         </span>
       </figcaption>
-      <canvas ref={canvasRef} className="block aspect-[4/3] w-full" />
+      <div className="relative">
+        <canvas ref={canvasRef} className="block aspect-[4/3] w-full" />
+        <FeedToggle />
+      </div>
     </figure>
   )
 }

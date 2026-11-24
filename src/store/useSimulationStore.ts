@@ -74,10 +74,12 @@ interface SimulationStore {
   turbulence: number
   vision: VisionStatus
   visionStage: TrackerStage
+  showFeed: boolean
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
   setVision: (vision: VisionStatus) => void
   setVisionStage: (visionStage: TrackerStage) => void
+  toggleFeed: () => void
 }
 
 export const useSimulationStore = create<SimulationStore>()((set) => ({
@@ -85,8 +87,10 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   turbulence: 1,
   vision: 'idle',
   visionStage: 'permission',
+  showFeed: true,
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
   setVision: (vision) => set({ vision }),
   setVisionStage: (visionStage) => set({ visionStage }),
+  toggleFeed: () => set((state) => ({ showFeed: !state.showFeed })),
 }))
