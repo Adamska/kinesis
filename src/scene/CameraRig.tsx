@@ -1,10 +1,12 @@
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
+import { REDUCED_MOTION } from '../config/motion'
 
 const ORBIT_DISTANCE = 5
 const PORTRAIT_FIT = 0.85
-const AZIMUTH_SWAY = 0.45
-const ELEVATION_SWAY = 0.12
+const SWAY = REDUCED_MOTION ? 0 : 1
+const AZIMUTH_SWAY = 0.45 * SWAY
+const ELEVATION_SWAY = 0.12 * SWAY
 
 /** Slow orbital sway that reveals the depth of the volume without stealing the pointer. */
 export function CameraRig() {

@@ -1,4 +1,5 @@
 import { MathUtils, Vector3 } from 'three'
+import { REDUCED_MOTION } from '../config/motion'
 
 const SIGMA = 10
 const RHO = 28
@@ -34,7 +35,7 @@ export class AutonomousFlow {
     this.clock += dt
     const phase = (this.clock % CYCLE_SECONDS) / CYCLE_SECONDS
 
-    if (previousPhase < RELEASE && phase >= RELEASE) this.burstPending = true
+    if (previousPhase < RELEASE && phase >= RELEASE && !REDUCED_MOTION) this.burstPending = true
     this.pinch = phase < RELEASE ? MathUtils.smoothstep(phase, GATHER_START, GATHER_FULL) : 0
 
     // The trajectory slows while gathering so the gravity well can hold on to its disc.
