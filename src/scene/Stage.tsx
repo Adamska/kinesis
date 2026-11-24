@@ -3,6 +3,7 @@ import { registerCaptureCanvas } from '../capture/clipRecorder'
 import { DENSITIES } from '../config/density'
 import { useSimulationStore } from '../store/useSimulationStore'
 import { AdaptiveResolution, MAX_PIXEL_RATIO } from './AdaptiveResolution'
+import { Backdrop } from './Backdrop'
 import { CameraRig } from './CameraRig'
 import { ForceReticles } from './ForceReticles'
 import { ParticleField } from './ParticleField'
@@ -25,6 +26,7 @@ export function Stage() {
     >
       <color attach="background" args={[VOID_COLOR]} />
       <CameraRig />
+      <Backdrop />
       {/* A new budget rebuilds the simulation from scratch, so the field is keyed by it. */}
       <ParticleField key={size} size={size} />
       <ForceReticles />

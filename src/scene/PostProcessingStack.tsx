@@ -1,6 +1,7 @@
+import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing'
-import { ToneMappingMode } from 'postprocessing'
-import { useEffect, useMemo } from 'react'
+import { EffectPass, ToneMappingMode, type EffectComposer as Composer } from 'postprocessing'
+import { useEffect, useMemo, useRef } from 'react'
 import { HalfFloatType } from 'three'
 import { TrailPass } from '../post/TrailPass'
 import { useSpacetime } from '../post/useSpacetime'
@@ -26,9 +27,19 @@ function useTrails(): TrailPass {
 export function PostProcessingStack() {
   const trails = useTrails()
   const spacetime = useSpacetime()
+  const composer = useRef<Composer>(null)
+
+  // The dark, palette-tinted backdrop is a very shallow gradient that bands at 8 bits.
+  // Dithering after the final color conversion breaks the bands up. The composer
+  // rebuilds its effect passes when its children change, so this is checked each frame.
+  useFrame(() => {
+    for (const pass of composer.current?.passes ?? []) {
+      if (pass instanceof EffectPass && !pass.dithering) pass.dithering = true
+    }
+  })
 
   return (
-    <EffectComposer multisampling={0} frameBufferType={HalfFloatType}>
+    <EffectComposer ref={composer} multisampling={0} frameBufferType={HalfFloatType}>
       <primitive object={trails} />
       <primitive object={spacetime} />
       <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.15} intensity={0.55} radius={0.7} />
