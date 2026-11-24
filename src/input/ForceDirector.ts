@@ -1,4 +1,4 @@
-import { Vector3, type Camera } from 'three'
+import { MathUtils, Vector3, type Camera } from 'three'
 import { DEFAULT_ORBIT_AXIS, FORCE_POINT_COUNT, type ForcePoint } from '../gpgpu/forceField'
 import { simulationBridge, type InputSource } from '../store/useSimulationStore'
 import { AutonomousFlow } from './AutonomousFlow'
@@ -14,6 +14,9 @@ const MAX_HAND_SPEED = 7
 const HAND_STALE_MS = 400
 const HAND_DEPTH_RANGE = 1.1
 const HAND_REACH = 2.2
+// Camera exposure and frame delivery add latency that inference timing does not see.
+const CAPTURE_LATENCY_S = 0.03
+const MAX_PREDICTION_S = 0.12
 
 // A hand sweeps a much shorter world distance than a pointer flick for the same
 // intent, so tracked motion is amplified to stir the fluid just as hard.
@@ -98,10 +101,17 @@ export class ForceDirector {
       const distance = camera.position.length()
       const reachX = Math.min(1, (HAND_REACH * elements[0]) / distance)
       const reachY = Math.min(1, (HAND_REACH * elements[5]) / distance)
+      const latency = simulationBridge.telemetry.inferenceMs / 1000 + CAPTURE_LATENCY_S
       hands.forEach((hand, index) => {
         if (!live(index)) return
         const input = this.inputs[index]
-        projectToFocalPlane(camera, hand.x * reachX, hand.y * reachY, hand.depth * HAND_DEPTH_RANGE, input.target)
+        // Dead reckoning: the pose is already stale by the capture and inference delay
+        // plus the time since it arrived, so the hand is extrapolated along its filtered
+        // velocity. This hides most of the vision latency during a sweep.
+        const lead = Math.min((now - hand.seenAt) / 1000 + latency, MAX_PREDICTION_S)
+        const x = MathUtils.clamp(hand.x + hand.vx * lead, -1, 1) * reachX
+        const y = MathUtils.clamp(hand.y + hand.vy * lead, -1, 1) * reachY
+        projectToFocalPlane(camera, x, y, hand.depth * HAND_DEPTH_RANGE, input.target)
         input.active = true
         input.pinch = hand.pinch
         input.burst = hand.burstPending

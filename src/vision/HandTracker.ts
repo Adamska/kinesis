@@ -10,7 +10,7 @@ export interface TrackerEvents {
   onFailure: (error: unknown) => void
 }
 
-const INFERENCE_INTERVAL_MS = 1000 / 30
+const POLL_INTERVAL_MS = 1000 / 30
 const DEFAULT_ASPECT = 4 / 3
 
 function openCamera(): Promise<MediaStream> {
@@ -21,8 +21,8 @@ function openCamera(): Promise<MediaStream> {
 }
 
 /**
- * Owns the camera stream and the landmark worker. Camera frames are sampled from an
- * offscreen video on a 30 Hz timer and transferred to the worker, where MediaPipe
+ * Owns the camera stream and the landmark worker. Camera frames are taken from an
+ * offscreen video as they are decoded and transferred to the worker, where MediaPipe
  * loads, compiles and runs. Neither startup nor inference ever occupies the main
  * thread, and results go straight into the simulation bridge without touching React.
  */
@@ -36,6 +36,8 @@ export class HandTracker {
   private timer = 0
   private disposed = false
   private awaitingResult = false
+  private frameCallbacksSeen = false
+  private frameReady = false
   private lastVideoTime = -1
 
   constructor(events: TrackerEvents) {
@@ -64,7 +66,7 @@ export class HandTracker {
     this.video.srcObject = this.stream
     await this.video.play()
     this.worker.onerror = (event) => this.events.onFailure(event.error ?? event.message)
-    this.pump()
+    this.startSampling()
   }
 
   dispose(): void {
@@ -99,16 +101,43 @@ export class HandTracker {
     this.worker.postMessage(request, transfer)
   }
 
-  /** Samples the camera at most once per interval and only when the worker is idle. */
-  private readonly pump = (): void => {
-    if (this.disposed) return
-    this.timer = window.setTimeout(this.pump, INFERENCE_INTERVAL_MS)
-
+  /**
+   * Video frame callbacks fire as each camera frame is decoded, which removes up to a
+   * full polling interval of latency. A timer poll covers browsers without them and
+   * stands down as soon as the first callback arrives.
+   */
+  private startSampling(): void {
     const { video } = this
-    const hasNewFrame =
-      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime !== this.lastVideoTime
-    if (this.awaitingResult || !hasNewFrame) return
-    this.lastVideoTime = video.currentTime
+    if ('requestVideoFrameCallback' in video) {
+      const onFrame = () => {
+        if (this.disposed) return
+        this.frameCallbacksSeen = true
+        this.frameReady = true
+        video.requestVideoFrameCallback(onFrame)
+        this.capture()
+      }
+      video.requestVideoFrameCallback(onFrame)
+    }
+    this.poll()
+  }
+
+  // Without frame callbacks the best available signal is the playback clock. On a live
+  // stream it advances continuously, so this path may resend a frame occasionally.
+  private readonly poll = (): void => {
+    if (this.disposed || this.frameCallbacksSeen) return
+    this.timer = window.setTimeout(this.poll, POLL_INTERVAL_MS)
+    if (this.video.currentTime === this.lastVideoTime) return
+    this.lastVideoTime = this.video.currentTime
+    this.frameReady = true
+    this.capture()
+  }
+
+  /** Sends the pending camera frame once the worker is idle and the page is visible. */
+  private capture(): void {
+    const { video } = this
+    const decoded = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+    if (document.hidden || this.awaitingResult || !this.frameReady || !decoded) return
+    this.frameReady = false
     this.awaitingResult = true
 
     createImageBitmap(video).then(
@@ -132,5 +161,7 @@ export class HandTracker {
     assignHandSlots(hands, simulationBridge.hands).forEach((landmarks, slot) => {
       this.gestures[slot].update(landmarks, aspect, now)
     })
+    // A frame that was decoded while the worker was busy is sent right away.
+    this.capture()
   }
 }

@@ -17,6 +17,7 @@ const FAR_PALM = 0.12
 const BURST_WINDOW_MS = 380
 const BURST_COOLDOWN_MS = 650
 const NORMAL_RATE = 10
+const VELOCITY_RATE = 25
 
 const wristToIndex = new Vector3()
 const wristToPinky = new Vector3()
@@ -80,8 +81,15 @@ export class GestureExtractor {
 
     // A hand that reappears after a real loss snaps into place: dt = 0 re-primes the filters.
     const dt = hand.visible ? Math.min((now - this.lastSampleAt) / 1000, 0.1) : 0
+    const previousX = hand.x
+    const previousY = hand.y
     hand.x = this.x.filter(x, dt)
     hand.y = this.y.filter(y, dt)
+    // Velocity of the filtered path with its own light smoothing: responsive enough
+    // that extrapolation stops when the hand does, without amplifying jitter.
+    const blend = dt > 0 ? 1 - Math.exp(-dt * VELOCITY_RATE) : 0
+    hand.vx = dt > 0 ? hand.vx + ((hand.x - previousX) / dt - hand.vx) * blend : 0
+    hand.vy = dt > 0 ? hand.vy + ((hand.y - previousY) / dt - hand.vy) * blend : 0
     hand.depth = this.depth.filter(depth, dt)
     hand.pinch = dt > 0 ? MathUtils.lerp(hand.pinch, pinch, 1 - Math.exp(-dt * PINCH_RATE)) : pinch
 

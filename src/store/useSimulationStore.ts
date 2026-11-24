@@ -15,6 +15,9 @@ export interface TrackedHand {
   /** Mirrored normalized device coordinates of the palm center, each in [-1, 1]. */
   x: number
   y: number
+  /** Filtered velocity of x and y in units per second, used to extrapolate past latency. */
+  vx: number
+  vy: number
   /** Apparent hand size mapped to [-1, 1]; positive means closer to the camera. */
   depth: number
   pinch: number
@@ -52,6 +55,8 @@ export const simulationBridge: SimulationBridge = {
     seenAt: 0,
     x: 0,
     y: 0,
+    vx: 0,
+    vy: 0,
     depth: 0,
     pinch: 0,
     burstPending: false,
