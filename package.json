@@ -2,7 +2,7 @@
   "name": "kinesis",
   "private": true,
   "version": "0.1.0",
-  "description": "Real-time 102,400-particle GPGPU fluid simulation driven by webcam hand gestures",
+  "description": "Real-time GPGPU fluid of up to a million particles steered by webcam hand gestures",
   "license": "MIT",
   "type": "module",
   "scripts": {
