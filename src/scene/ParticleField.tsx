@@ -20,6 +20,8 @@ import { simulationBridge, useSimulationStore } from '../store/useSimulationStor
 const PARTICLE_SIZE = 0.022
 const PALETTE_BLEND_RATE = 4
 const FRAME_TIME_SMOOTHING = 0.05
+// Loud passages from the microphone stir the field harder.
+const AUDIO_TURBULENCE_GAIN = 1.6
 
 const scratch = new Vector3()
 
@@ -98,7 +100,12 @@ export function ParticleField() {
     director.update(delta, state.camera)
     morph.request(shape)
     morph.update(delta)
-    engine.step(delta, { forces: simulationBridge, turbulence, targets: morph.targets, morph: morph.strength })
+    engine.step(delta, {
+      forces: simulationBridge,
+      turbulence: turbulence * (1 + AUDIO_TURBULENCE_GAIN * simulationBridge.audioLevel),
+      targets: morph.targets,
+      morph: morph.strength,
+    })
 
     uniforms.uPositions.value = engine.positionTexture
     uniforms.uVelocities.value = engine.velocityTexture

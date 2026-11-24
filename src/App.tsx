@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { bindAudioVisibility, shutdownAudio } from './audio/audioSession'
 import { Hud } from './components/hud/Hud'
 import { useKeyboardShortcuts } from './input/shortcuts'
 import { Stage } from './scene/Stage'
@@ -13,9 +14,12 @@ export function App() {
 
   useEffect(() => {
     const cancelPreload = schedulePreload()
+    const unbindAudio = bindAudioVisibility()
     return () => {
       cancelPreload()
+      unbindAudio()
       shutdownTracking()
+      shutdownAudio()
     }
   }, [])
 

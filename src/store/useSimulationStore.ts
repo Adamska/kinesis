@@ -10,6 +10,7 @@ import { readUrlSettings } from './urlSettings'
 export type InputSource = 'autonomous' | 'pointer' | 'tracking'
 export type Gesture = 'flow' | 'pinch' | 'shockwave'
 export type VisionStatus = 'idle' | 'loading' | 'active' | 'denied' | 'unavailable'
+export type MicStatus = 'off' | 'starting' | 'on' | 'denied'
 
 export interface TrackedHand {
   visible: boolean
@@ -42,8 +43,10 @@ export interface Telemetry {
 
 export interface SimulationBridge extends ForceField {
   hands: TrackedHand[]
-  /** Set by the keyboard to fire a shockwave from every active force point. */
+  /** Set by the keyboard or a sound onset to fire a shockwave from every active point. */
   burstRequested: boolean
+  /** Microphone envelope in [0, 1], 0 while the microphone is off. */
+  audioLevel: number
   telemetry: Telemetry
 }
 
@@ -55,6 +58,7 @@ export interface SimulationBridge extends ForceField {
 export const simulationBridge: SimulationBridge = {
   points: Array.from({ length: FORCE_POINT_COUNT }, (_, index) => createForcePoint(index)),
   burstRequested: false,
+  audioLevel: 0,
   hands: Array.from({ length: MAX_HANDS }, () => ({
     visible: false,
     seenAt: 0,
@@ -81,6 +85,8 @@ interface SimulationStore {
   showFeed: boolean
   zen: boolean
   shortcutsOpen: boolean
+  sound: boolean
+  mic: MicStatus
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
   setShape: (shape: ShapeId) => void
@@ -89,6 +95,8 @@ interface SimulationStore {
   toggleFeed: () => void
   toggleZen: () => void
   setShortcutsOpen: (open: boolean) => void
+  setSound: (sound: boolean) => void
+  setMic: (mic: MicStatus) => void
 }
 
 export const useSimulationStore = create<SimulationStore>()((set) => ({
@@ -98,6 +106,8 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   showFeed: true,
   zen: false,
   shortcutsOpen: false,
+  sound: false,
+  mic: 'off',
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
   setShape: (shape) => set({ shape }),
@@ -106,4 +116,6 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   toggleFeed: () => set((state) => ({ showFeed: !state.showFeed })),
   toggleZen: () => set((state) => ({ zen: !state.zen })),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  setSound: (sound) => set({ sound }),
+  setMic: (mic) => set({ mic }),
 }))
