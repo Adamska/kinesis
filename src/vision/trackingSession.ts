@@ -99,6 +99,30 @@ export function toggleTracking(): void {
   else void enableTracking()
 }
 
+/**
+ * Turns the body silhouette on or off. Segmentation loads its small model on first use
+ * and only runs on frames the tracker sends, so it costs nothing without the camera.
+ */
+export async function toggleSilhouette(): Promise<void> {
+  const { silhouette, setSilhouette } = useSimulationStore.getState()
+  const landmarks = await preloadTracking()
+  if (silhouette === 'on' || silhouette === 'loading') {
+    landmarks.setSegmentation(false)
+    setSilhouette('off')
+    return
+  }
+  setSilhouette('loading')
+  try {
+    await landmarks.ready
+  } catch {
+    setSilhouette('unavailable')
+    return
+  }
+  landmarks.setSegmentation(true, (available) => {
+    if (useSimulationStore.getState().silhouette === 'loading') setSilhouette(available ? 'on' : 'unavailable')
+  })
+}
+
 /** The live camera element while tracking runs, for previews. */
 export function trackingVideo(): HTMLVideoElement | null {
   return tracker?.video ?? null

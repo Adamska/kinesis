@@ -15,11 +15,13 @@ import positionFragment from '../shaders/position.frag?raw'
 import seedFragment from '../shaders/seed.frag?raw'
 import simulationVertex from '../shaders/simulation.vert?raw'
 import velocityFragment from '../shaders/velocity.frag?raw'
+import type { BodyObstacle } from './BodyObstacle'
 import type { ForceField } from './forceField'
 import { createFullscreenTriangle, createStateTarget } from './primitives'
 import {
   bindForceMotion,
   bindForces,
+  bindObstacle,
   createEmptyTargets,
   createForceUniforms,
   createVelocityUniforms,
@@ -42,6 +44,8 @@ export interface SimulationInputs {
   targets: Texture | null
   /** Strength of the pull toward the targets, from 0 to 1. */
   morph: number
+  /** The user's silhouette as an obstacle, or null when segmentation is off. */
+  obstacle: BodyObstacle | null
 }
 
 /*
@@ -96,7 +100,7 @@ export class SimulationEngine {
     return this.velocity.read.texture
   }
 
-  step(delta: number, { forces, turbulence, targets, morph }: SimulationInputs): void {
+  step(delta: number, { forces, turbulence, targets, morph, obstacle }: SimulationInputs): void {
     const dt = Math.min(delta, MAX_TIME_STEP)
     this.elapsed += dt
     const previousTarget = this.renderer.getRenderTarget()
@@ -108,6 +112,7 @@ export class SimulationEngine {
     velocity.uTurbulence.value = turbulence
     velocity.uTargets.value = targets ?? this.emptyTargets
     velocity.uMorph.value = targets ? morph : 0
+    bindObstacle(velocity, obstacle, this.emptyTargets)
     this.render(this.velocityPass, this.velocity)
 
     // Semi-implicit Euler: positions integrate the velocity computed this frame,

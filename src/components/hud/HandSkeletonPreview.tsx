@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { simulationBridge, useSimulationStore, type TrackedHand } from '../../store/useSimulationStore'
 import { FINGERTIPS, HAND_BONES, Landmark, LANDMARK_COUNT, LANDMARK_STRIDE } from '../../vision/handTopology'
-import { trackingVideo } from '../../vision/trackingSession'
+import { toggleSilhouette, trackingVideo } from '../../vision/trackingSession'
 
 const SIGNAL = '215 244 255'
 const MAX_PIXEL_RATIO = 2
@@ -68,21 +68,38 @@ function drawSkeleton(context: CanvasRenderingContext2D, hand: TrackedHand, widt
 }
 
 /** Corner wireframe of the tracked 21-point hands, redrawn on its own animation frame loop. */
-function FeedToggle() {
-  const showFeed = useSimulationStore((state) => state.showFeed)
-  const toggleFeed = useSimulationStore((state) => state.toggleFeed)
+const SILHOUETTE_LABELS = { off: 'Body', loading: 'Body ...', on: 'Body', unavailable: 'No body' } as const
 
+function PreviewToggle({ label, pressed, onToggle }: { label: string; pressed: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
-      aria-pressed={showFeed}
-      onClick={toggleFeed}
-      className={`pointer-events-auto absolute right-2 bottom-1.5 cursor-pointer uppercase transition-colors ${
-        showFeed ? 'text-signal' : 'text-white/40 hover:text-white/75'
+      aria-pressed={pressed}
+      onClick={onToggle}
+      className={`pointer-events-auto cursor-pointer uppercase transition-colors ${
+        pressed ? 'text-signal' : 'text-white/40 hover:text-white/75'
       }`}
     >
-      <span className="text-white/35">[</span> Feed <span className="text-white/35">]</span>
+      <span className="text-white/35">[</span> {label} <span className="text-white/35">]</span>
     </button>
+  )
+}
+
+/** Overlay switches: the camera feed underlay and the body silhouette obstacle. */
+function PreviewToggles() {
+  const showFeed = useSimulationStore((state) => state.showFeed)
+  const toggleFeed = useSimulationStore((state) => state.toggleFeed)
+  const silhouette = useSimulationStore((state) => state.silhouette)
+
+  return (
+    <div className="absolute inset-x-2 bottom-1.5 flex justify-between">
+      <PreviewToggle
+        label={SILHOUETTE_LABELS[silhouette]}
+        pressed={silhouette === 'on'}
+        onToggle={() => void toggleSilhouette()}
+      />
+      <PreviewToggle label="Feed" pressed={showFeed} onToggle={toggleFeed} />
+    </div>
   )
 }
 
@@ -132,7 +149,7 @@ export function HandSkeletonPreview() {
       </figcaption>
       <div className="relative">
         <canvas ref={canvasRef} className="block aspect-[4/3] w-full" />
-        <FeedToggle />
+        <PreviewToggles />
       </div>
     </figure>
   )

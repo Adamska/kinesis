@@ -73,7 +73,7 @@ export class HandTracker {
     this.video.srcObject = this.stream
     await this.video.play()
     this.worker.attach(
-      (hands, inferenceMs) => this.receive(hands, inferenceMs),
+      (hands, mask, inferenceMs) => this.receive(hands, mask, inferenceMs),
       (error) => this.events.onFailure(error),
     )
     this.startSampling()
@@ -142,13 +142,20 @@ export class HandTracker {
     )
   }
 
-  private receive(hands: Float32Array[], inferenceMs: number): void {
+  private receive(hands: Float32Array[], mask: Uint8Array | null, inferenceMs: number): void {
     this.awaitingResult = false
     if (this.disposed) return
     const telemetry = simulationBridge.telemetry
     telemetry.inferenceMs += (inferenceMs - telemetry.inferenceMs) * 0.2
     const aspect = this.video.videoWidth / this.video.videoHeight || DEFAULT_ASPECT
     const now = performance.now()
+    if (mask) {
+      const silhouette = simulationBridge.silhouette
+      silhouette.mask.set(mask)
+      silhouette.aspect = aspect
+      silhouette.seenAt = now
+      silhouette.version++
+    }
     assignHandSlots(hands, simulationBridge.hands).forEach((landmarks, slot) => {
       this.gestures[slot].update(landmarks, aspect, now)
     })

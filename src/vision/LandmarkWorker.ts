@@ -1,7 +1,7 @@
 import { simulationBridge } from '../store/useSimulationStore'
 import type { LoadStage, WorkerRequest, WorkerResponse } from './landmarkProtocol'
 
-export type ResultListener = (hands: Float32Array[], inferenceMs: number) => void
+export type ResultListener = (hands: Float32Array[], mask: Uint8Array | null, inferenceMs: number) => void
 
 /**
  * Main-thread handle on the landmark worker. Loading is decoupled from the camera, so
@@ -16,6 +16,7 @@ export class LandmarkWorker {
   private readonly stageListeners = new Set<(stage: LoadStage) => void>()
   private resultListener: ResultListener | null = null
   private failureListener: ((error: unknown) => void) | null = null
+  private segmentationListener: ((available: boolean) => void) | null = null
 
   constructor() {
     this.ready = new Promise((resolve, reject) => {
@@ -31,7 +32,8 @@ export class LandmarkWorker {
         } else if (data.type === 'progress') simulationBridge.telemetry.downloadedBytes = data.bytes
         else if (data.type === 'ready') resolve()
         else if (data.type === 'error') reject(new Error(data.message))
-        else this.resultListener?.(data.hands, data.inferenceMs)
+        else if (data.type === 'segmentation') this.segmentationListener?.(data.available)
+        else this.resultListener?.(data.hands, data.mask, data.inferenceMs)
       }
     })
     // Rejections are delivered to whoever awaits `ready`; an unobserved preload
@@ -49,6 +51,12 @@ export class LandmarkWorker {
   attach(onResult: ResultListener | null, onFailure: ((error: unknown) => void) | null = null): void {
     this.resultListener = onResult
     this.failureListener = onFailure
+  }
+
+  /** Turns person segmentation on or off; the listener hears whether it could load. */
+  setSegmentation(enabled: boolean, onAvailability: ((available: boolean) => void) | null = null): void {
+    this.segmentationListener = onAvailability
+    this.send({ type: 'segmentation', enabled })
   }
 
   detect(bitmap: ImageBitmap): void {

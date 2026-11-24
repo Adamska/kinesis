@@ -6,6 +6,7 @@ import type { PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
 import type { ShapeId } from '../gpgpu/shapeTargets'
 import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from '../vision/handTopology'
+import { MASK_HEIGHT, MASK_WIDTH } from '../vision/silhouetteMask'
 import type { TrackerStage } from '../vision/HandTracker'
 import { readUrlSettings } from './urlSettings'
 
@@ -13,6 +14,7 @@ export type InputSource = 'autonomous' | 'pointer' | 'tracking'
 export type Gesture = 'flow' | 'pinch' | 'shockwave'
 export type VisionStatus = 'idle' | 'loading' | 'active' | 'denied' | 'unavailable'
 export type MicStatus = 'off' | 'starting' | 'on' | 'denied'
+export type SilhouetteStatus = 'off' | 'loading' | 'on' | 'unavailable'
 
 export interface TrackedHand {
   visible: boolean
@@ -35,6 +37,16 @@ export interface TrackedHand {
   aspect: number
 }
 
+export interface Silhouette {
+  /** Blurred person mask in camera image space, MASK_WIDTH x MASK_HEIGHT bytes. */
+  mask: Uint8Array
+  seenAt: number
+  /** Width over height of the camera frame. */
+  aspect: number
+  /** Incremented on every new mask so the GPU copy is refreshed only when needed. */
+  version: number
+}
+
 export interface Telemetry {
   fps: number
   inferenceMs: number
@@ -49,6 +61,7 @@ export interface SimulationBridge extends ForceField {
   burstRequested: boolean
   /** Microphone envelope in [0, 1], 0 while the microphone is off. */
   audioLevel: number
+  silhouette: Silhouette
   telemetry: Telemetry
 }
 
@@ -61,6 +74,7 @@ export const simulationBridge: SimulationBridge = {
   points: Array.from({ length: FORCE_POINT_COUNT }, (_, index) => createForcePoint(index)),
   burstRequested: false,
   audioLevel: 0,
+  silhouette: { mask: new Uint8Array(MASK_WIDTH * MASK_HEIGHT), seenAt: 0, aspect: 4 / 3, version: 0 },
   hands: Array.from({ length: MAX_HANDS }, () => ({
     visible: false,
     seenAt: 0,
@@ -91,6 +105,7 @@ interface SimulationStore {
   sound: boolean
   mic: MicStatus
   trails: boolean
+  silhouette: SilhouetteStatus
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
   setShape: (shape: ShapeId) => void
@@ -103,6 +118,7 @@ interface SimulationStore {
   setSound: (sound: boolean) => void
   setMic: (mic: MicStatus) => void
   toggleTrails: () => void
+  setSilhouette: (silhouette: SilhouetteStatus) => void
 }
 
 export const useSimulationStore = create<SimulationStore>()((set) => ({
@@ -115,6 +131,7 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   sound: false,
   mic: 'off',
   trails: !REDUCED_MOTION,
+  silhouette: 'off',
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
   setShape: (shape) => set({ shape }),
@@ -127,4 +144,5 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   setSound: (sound) => set({ sound }),
   setMic: (mic) => set({ mic }),
   toggleTrails: () => set((state) => ({ trails: !state.trails })),
+  setSilhouette: (silhouette) => set({ silhouette }),
 }))

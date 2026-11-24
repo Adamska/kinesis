@@ -1,4 +1,5 @@
-import { DataTexture, FloatType, RGBAFormat, Vector3, type Texture } from 'three'
+import { DataTexture, FloatType, Matrix4, RGBAFormat, Vector2, Vector3, type Texture } from 'three'
+import type { BodyObstacle } from './BodyObstacle'
 import { FORCE_POINT_COUNT, type ForceField } from './forceField'
 
 const vectors = (): Vector3[] => Array.from({ length: FORCE_POINT_COUNT }, () => new Vector3())
@@ -24,6 +25,14 @@ export function createVelocityUniforms() {
     uForceAxis: { value: vectors() },
     uTargets: { value: null as Texture | null },
     uMorph: { value: 0 },
+    uMask: { value: null as Texture | null },
+    uMaskStrength: { value: 0 },
+    uMaskScale: { value: new Vector2(1, 1) },
+    uBodyCenter: { value: new Vector2(0.5, 0.5) },
+    uViewProjection: { value: new Matrix4() },
+    uCameraRight: { value: new Vector3(1, 0, 0) },
+    uCameraUp: { value: new Vector3(0, 1, 0) },
+    uScreenAspect: { value: 1 },
   }
 }
 
@@ -42,6 +51,19 @@ export function bindForceMotion(uniforms: VelocityUniforms, forces: ForceField):
     uniforms.uForceVelocity.value[index].copy(point.velocity)
     uniforms.uForceAxis.value[index].copy(point.axis)
   })
+}
+
+export function bindObstacle(uniforms: VelocityUniforms, obstacle: BodyObstacle | null, fallback: Texture): void {
+  const strength = obstacle?.strength ?? 0
+  uniforms.uMaskStrength.value = strength
+  uniforms.uMask.value = obstacle && strength > 1e-3 ? obstacle.texture : fallback
+  if (!obstacle || strength <= 1e-3) return
+  uniforms.uMaskScale.value.copy(obstacle.maskScale)
+  uniforms.uBodyCenter.value.copy(obstacle.center)
+  uniforms.uViewProjection.value.copy(obstacle.viewProjection)
+  uniforms.uCameraRight.value.copy(obstacle.right)
+  uniforms.uCameraUp.value.copy(obstacle.up)
+  uniforms.uScreenAspect.value = obstacle.screenAspect
 }
 
 /** A single texel with w = 0: no particle is held by any shape. */

@@ -11,6 +11,15 @@ uniform vec3 uForceDrive[FORCE_COUNT];
 // Shape morph: per-texel target positions and the global strength of the pull.
 uniform sampler2D uTargets;
 uniform float uMorph;
+// Body obstacle: the user's person mask, mirrored and cover-fit onto the screen.
+uniform sampler2D uMask;
+uniform float uMaskStrength;
+uniform vec2 uMaskScale;
+uniform vec2 uBodyCenter;
+uniform mat4 uViewProjection;
+uniform vec3 uCameraRight;
+uniform vec3 uCameraUp;
+uniform float uScreenAspect;
 
 varying vec2 vUv;
 
@@ -39,8 +48,38 @@ const float MORPH_STIFFNESS = 8.0;
 const float MORPH_DAMPING = 5.66;
 const float CARVE_RADIUS = 0.55;
 
+const float BODY_PUSH = 10.0;
+const float BODY_DRAG = 3.0;
+const float MASK_TEXEL = 1.0 / 48.0;
+
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// Pushes a particle out of the user's silhouette as seen from the camera. The blurred
+// mask ramps up toward the body, so its negated gradient points out. Deep inside, where
+// the mask is flat, the direction away from the body's centroid takes over.
+vec3 bodyAcceleration(vec3 location, inout vec3 velocity) {
+  vec4 clip = uViewProjection * vec4(location, 1.0);
+  if (uMaskStrength < 1e-3 || clip.w <= 0.0) return vec3(0.0);
+  vec2 screen = clip.xy / clip.w * 0.5 + 0.5;
+  // Mirrored on x, with image v running downward.
+  vec2 uv = 0.5 + (vec2(1.0) - screen - 0.5) * uMaskScale;
+  float body = texture2D(uMask, uv).r * uMaskStrength;
+  if (body < 0.01) return vec3(0.0);
+
+  vec2 e = vec2(1.5 * MASK_TEXEL, 0.0);
+  vec2 gradient = vec2(
+    texture2D(uMask, uv + e.xy).r - texture2D(uMask, uv - e.xy).r,
+    texture2D(uMask, uv + e.yx).r - texture2D(uMask, uv - e.yx).r
+  );
+  // Both image axes run against the screen axes, so the screen-space inward
+  // direction is the negated uv gradient and outward is the gradient itself.
+  vec2 away = (screen - uBodyCenter) * vec2(uScreenAspect, 1.0);
+  vec2 outward = gradient * 8.0 + 0.6 * away / max(length(away), 1e-3);
+  vec3 push = uCameraRight * outward.x + uCameraUp * outward.y;
+  velocity *= 1.0 - min(body * BODY_DRAG * uDelta, 0.5);
+  return push / max(length(push), 1e-4) * body * BODY_PUSH;
 }
 
 void main() {
@@ -93,6 +132,8 @@ void main() {
   float radius = length(location);
   float excess = max(radius - REST_RADIUS, 0.0);
   acceleration -= location * (CONFINEMENT_STIFFNESS * excess / max(radius, 1e-4)) * (1.0 - hold);
+
+  acceleration += bodyAcceleration(location, velocity);
 
   // Critically damped spring toward the shape: it settles without ringing.
   acceleration += (MORPH_STIFFNESS * (goal.xyz - location) - MORPH_DAMPING * velocity) * hold;
