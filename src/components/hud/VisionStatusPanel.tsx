@@ -92,7 +92,7 @@ function AwaitingHandPanel() {
       <p className="text-[12px] text-signal">Tracking online</p>
       <p className="mt-2 leading-relaxed text-white/60 normal-case tracking-[0.04em]">
         Raise one or both hands in front of the camera. Move to drag the fluid, pinch thumb and index to
-        gather it, tilt your palm to turn the vortex, then snap your hand open to release a shockwave.
+        gather it, tilt your palm to turn the vortex, then open your fingers to release a shockwave.
       </p>
     </section>
   )

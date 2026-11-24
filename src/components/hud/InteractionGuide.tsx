@@ -11,7 +11,7 @@ const POINTER_GUIDE = [
 const TRACKING_GUIDE = [
   ['Move hand', 'Drag the fluid'],
   ['Pinch', 'Singularity'],
-  ['Snap open', 'Shockwave'],
+  ['Release pinch', 'Shockwave'],
   ['Tilt palm', 'Spin axis'],
   ['Two hands', 'Twin vortices'],
   ['Keyboard', 'Press ?'],
