@@ -1,12 +1,12 @@
 # Kinesis
 
-A real-time fluid of up to a million particles simulated entirely on the GPU and steered by both hands from a webcam. Everything runs client-side in the browser: the physics in fragment shaders, hand tracking and person segmentation in WebAssembly.
+A real-time fluid of up to a million particles simulated entirely on the GPU and steered by both hands from a webcam. Everything runs client-side in the browser: the physics in fragment shaders, the hand tracking in WebAssembly.
 
 **Live demo: [kinesis-chi.vercel.app](https://kinesis-chi.vercel.app)**
 
 https://github.com/user-attachments/assets/3f41e1b1-8396-4dca-bb25-a712b9d310d2
 
-The page opens with the particles spelling the title, then releases them into the flow. No permission is needed: an autonomous attractor drives the field until you take over with the pointer, a touch screen or webcam tracking.
+The simulation starts at full fidelity on page load with no permissions required. An autonomous attractor drives the field until you take over with the pointer, a touch screen or webcam tracking.
 
 ## Quick start
 
@@ -30,35 +30,34 @@ Requires Node 20.19+ (or 22.12+) and a browser with WebGL2. The webcam and micro
 | Input | Stir | Singularity | Shockwave | Second vortex |
 | --- | --- | --- | --- | --- |
 | Pointer or touch | Move | Press and hold | Release | Second finger |
-| Webcam | Move a hand | Pinch thumb to index | Snap a closed hand open | Second hand |
+| Webcam | Move a hand | Pinch thumb to index | Open the pinch | Second hand |
 
-With the webcam, tilting the palm turns the spin axis of its vortex, and moving the hand toward or away from the camera pushes the force point through the depth of the cloud. A reticle marks every steered point; it tightens as a pinch closes and sends out a ring with each shockwave.
+With the webcam, a sweeping hand carries the fluid along with it, and tilting the palm turns the spin axis of its vortex. A reticle marks every steered point; it tightens as a pinch closes and sends out a ring with each shockwave.
 
-The dock holds the palette, turbulence and webcam toggle on its bottom row, and studio controls above it: forms, light trails, particle count, sound, microphone and clip recording. On narrow screens the studio row folds behind a toggle. The hand preview can show the camera feed and turn on the body silhouette.
+The dock holds the palette, turbulence and webcam toggle on its bottom row, and studio controls above it: light trails, particle count, sound, microphone and clip recording. On narrow screens the studio row folds behind a toggle. The hand preview can show the camera feed beneath the skeleton.
 
 | Key | Action | Key | Action |
 | --- | --- | --- | --- |
 | `1` - `3` | Palette | `T` | Light trails |
-| `S` | Next form | `A` | Sound |
-| `Space` | Shockwave | `M` | Microphone |
-| `[` `]` | Turbulence | `R` | Record a clip |
-| `W` | Webcam tracking | `B` | Body silhouette |
+| `Space` | Shockwave | `A` | Sound |
+| `[` `]` | Turbulence | `M` | Microphone |
+| `W` | Webcam tracking | `R` | Record a clip |
 | `H` | Hide the interface | `F` | Fullscreen |
 | `?` | Shortcut sheet | | |
 
-Palette, turbulence, form and particle count are mirrored in the query string (`?palette=corona&turbulence=1.40&shape=knot&particles=1m`), so any configuration can be shared as a link.
+Palette, turbulence and particle count are mirrored in the query string (`?palette=corona&turbulence=1.40&particles=1m`), so any configuration can be shared as a link.
 
 ## Architecture
 
 ```
- webcam ─> HandTracker ⇄ landmark worker ──┐   hands, palm normals, person mask
+ webcam ─> HandTracker ⇄ landmark worker ──┐   hands, palm normals
  pointer > PointerField (two contacts) ────┼─> ForceDirector ──> simulationBridge
  Lorenz ─> AutonomousFlow ─────────────────┘   two force points        │
                                                                        │ read every frame
             ┌──────────────────────────────────────────────────────────┘
             v
    SimulationEngine.step()     velocity pass ─> position pass   (N x N, RGBA16F)
-            │                  + shape targets, body obstacle
+            │
             v
    ParticleField               vertex texture fetch, bokeh, additive HDR
             │
@@ -77,16 +76,16 @@ Every input source resolves into two force points, each with a position, a veloc
 
 ```
 src/
-  gpgpu/        SimulationEngine, force points, shape targets and morph, body obstacle, seed state
+  gpgpu/        SimulationEngine, force points, uniforms, seed state
   shaders/      curl noise, velocity and position passes, particles, reticle, trail, lensing
   post/         TrailPass (feedback), SpacetimePass (lensing and shockwave refraction)
   input/        ForceDirector, PointerField, AutonomousFlow, DeviceTilt, keyboard shortcuts
-  vision/       HandTracker, LandmarkWorker and its worker, gesture extraction, hand slots,
-                silhouette segmentation, One Euro filter, session lifecycle
+  vision/       HandTracker, LandmarkWorker and its worker, gesture extraction, hand path,
+                hand slots, One Euro filter, session lifecycle
   audio/        SoundEngine (generative synth), MicListener (envelope and onsets)
   capture/      Clip recorder
   scene/        Stage, ParticleField, CameraRig, ForceReticles, post-processing stack
-  store/        Zustand store, simulation bridge, URL settings, intro
+  store/        Zustand store, simulation bridge, URL settings
   components/   HUD: telemetry, dock, hand preview, status panels, shortcut sheet
   config/       Palettes, particle budgets, motion preferences, ranges
 ```
@@ -118,9 +117,7 @@ Two full-screen triangles per frame, one fragment per particle. The time step is
 - **Confinement.** A harmonic spring acts only beyond a rest radius, so the interior flow stays incompressible while escapees are pulled back.
 - **Pinch.** A Plummer-softened gravity well per force point, `a = -GM r / (r^2 + e^2)^(3/2)`. Velocities are steered toward the circular orbital speed around that point's spin axis, plus a slow inward drift, so matter spirals into a dense spinning disc. The second point spins the other way by default; with the webcam each axis follows its palm normal.
 - **Shockwave.** The impulse decays from 1 to 0 on the CPU. In the shader, `1 - impulse` is the blast's normalized age: a Gaussian shell rides the expanding front and kicks whatever it sweeps outward.
-- **Translation.** Fluid near a force point is accelerated along its velocity.
-- **Shapes.** A target texture in the state layout holds a point for every particle: the title, a sphere, a trefoil knot or a spiral galaxy. A critically damped spring pulls each particle to its target. A steered point carves through the shape, a pinch tears matter away and a shockwave releases the whole form, which then pulls itself back together.
-- **Body obstacle.** With segmentation on, each particle is projected to the screen and looked up in the mirrored person mask. The mask is blurred, so its gradient points out of the body; particles inside are pushed along it, and the fluid flows around the user's silhouette.
+- **Translation.** The pointer and the attractor push nearby fluid with an acceleration along their velocity. A tracked hand carries it instead: particles within its wake are brought up to the hand's speed along its direction of travel and their sideways drift is damped, so the fluid travels with the hand. The wake widens with speed, so a large sweep drags a large mass, and a hand at rest leaves the flow alone.
 
 ### Rendering
 
@@ -143,14 +140,12 @@ MediaPipe `HandLandmarker` (GPU delegate, CPU fallback) runs in a dedicated Web 
 
 - **Preloading.** The runtime and model start downloading and compiling when the pointer reaches the webcam toggle, or during idle time on fast connections. The worker outlives the camera, so turning tracking off and on again is instant.
 - **Hand slots.** MediaPipe returns hands in no stable order; each detection is matched to the slot whose last palm position is nearest, so a hand keeps its force point.
-- **Position.** The palm center is mirrored and passed through a One Euro filter, an exponential smoother whose cutoff rises with speed. The force point is extrapolated along the filtered velocity by the capture and inference delay, which hides most of the vision latency during a sweep.
+- **Position.** The palm center is mirrored and passed through a One Euro filter, an exponential smoother whose cutoff rises with speed. Camera frames arrive at 30 to 60 Hz while the screen refreshes faster, so the filtered positions are played back on a Catmull-Rom spline one frame interval behind the newest one. The path is continuous, passes through every measured position and never overshoots when the hand stops.
+- **Tracking gaps.** When every hand leaves the frame, the force points stay where they were for 2.5 s before the attractor takes over, and the attractor never gathers or bursts while tracking is on. A point that changes source starts at its new input rather than sweeping across the cloud.
 - **Orientation.** The palm normal is the cross product of the wrist-to-index and wrist-to-pinky knuckle vectors, with the landmark depth made isotropic by the frame aspect ratio.
-- **Gestures.** Metrics are divided by palm length, which makes them independent of distance from the camera. Pinch is the thumb-to-index distance through a smoothstep; a shockwave fires when a closed or pinched hand opens wide within 380 ms. The last pose is held for 280 ms through motion-blur dropouts.
-- **Silhouette.** On request, the worker also runs the selfie segmenter on every other frame. The confidence mask is box-filtered to 64 x 48, blurred and sent with the hand results.
+- **Gestures.** Metrics are divided by palm length, which makes them independent of distance from the camera. Pinch is the thumb-to-index distance through a smoothstep, counted only while the other three fingers stay extended, so a fist is not a pinch; a dead zone keeps relaxed, half-closed fingers from opening a well. A shockwave fires only when a pinch held for 150 ms is opened, never on a single noisy frame or during a fast sweep. The last pose is held for 280 ms through motion-blur dropouts.
 
-A hand covers far less world distance than a pointer flick, so `ForceDirector` amplifies tracked velocity before it reaches the drag term.
-
-Camera frames are processed locally and never leave the device. The WASM runtime and models (about 22 MB in total) are fetched from the jsDelivr and Google Storage CDNs the first time tracking is enabled.
+Camera frames are processed locally and never leave the device. The WASM runtime and model (about 22 MB in total) are fetched from the jsDelivr and Google Storage CDNs the first time tracking is enabled.
 
 ## Sound
 
@@ -169,7 +164,7 @@ With the microphone on, an envelope follower blends low-band and broadband energ
 
 ## Accessibility
 
-With `prefers-reduced-motion`, the field starts calmer, the camera stops swaying, the intro is skipped, trails are off and the autonomous flow fires no shockwaves. Every control is reachable from the keyboard, and the canvas carries a text description.
+With `prefers-reduced-motion`, the field starts calmer, the camera stops swaying, trails are off and the autonomous flow fires no shockwaves. Every control is reachable from the keyboard, and the canvas carries a text description.
 
 ## License
 
