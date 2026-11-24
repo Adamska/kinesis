@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { PALETTE_IDS } from '../config/palettes'
-import { simulationBridge, TURBULENCE_RANGE, useSimulationStore } from '../store/useSimulationStore'
+import { clampTurbulence } from '../config/settings'
+import { simulationBridge, useSimulationStore } from '../store/useSimulationStore'
 import { toggleTracking } from '../vision/trackingSession'
 
 export interface Shortcut {
@@ -15,8 +16,7 @@ const TURBULENCE_STEP = 0.1
 
 function nudgeTurbulence(direction: number): void {
   const { turbulence, setTurbulence } = useSimulationStore.getState()
-  const next = Math.min(Math.max(turbulence + direction * TURBULENCE_STEP, TURBULENCE_RANGE.min), TURBULENCE_RANGE.max)
-  setTurbulence(Math.round(next * 100) / 100)
+  setTurbulence(Math.round(clampTurbulence(turbulence + direction * TURBULENCE_STEP) * 100) / 100)
 }
 
 function toggleFullscreen(): void {

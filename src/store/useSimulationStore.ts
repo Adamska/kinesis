@@ -1,9 +1,10 @@
 import { Vector3 } from 'three'
 import { create } from 'zustand'
-import { DEFAULT_PALETTE, type PaletteId } from '../config/palettes'
+import type { PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
 import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from '../vision/handTopology'
 import type { TrackerStage } from '../vision/HandTracker'
+import { readUrlSettings } from './urlSettings'
 
 export type InputSource = 'autonomous' | 'pointer' | 'tracking'
 export type Gesture = 'flow' | 'pinch' | 'shockwave'
@@ -70,8 +71,6 @@ export const simulationBridge: SimulationBridge = {
   telemetry: { fps: 0, inferenceMs: 0, downloadedBytes: 0, source: 'autonomous', gesture: 'flow' },
 }
 
-export const TURBULENCE_RANGE = { min: 0.2, max: 2.5, step: 0.05 } as const
-
 interface SimulationStore {
   palette: PaletteId
   turbulence: number
@@ -90,8 +89,7 @@ interface SimulationStore {
 }
 
 export const useSimulationStore = create<SimulationStore>()((set) => ({
-  palette: DEFAULT_PALETTE,
-  turbulence: 1,
+  ...readUrlSettings(),
   vision: 'idle',
   visionStage: 'permission',
   showFeed: true,

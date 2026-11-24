@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { PALETTE_IDS, PALETTES, paletteGradient } from '../../config/palettes'
-import { TURBULENCE_RANGE, useSimulationStore, type VisionStatus } from '../../store/useSimulationStore'
+import { TURBULENCE_RANGE } from '../../config/settings'
+import { useSimulationStore, type VisionStatus } from '../../store/useSimulationStore'
 import { preloadTracking, toggleTracking } from '../../vision/trackingSession'
 import { GestureIndicator } from './GestureIndicator'
 

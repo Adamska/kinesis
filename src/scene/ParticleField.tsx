@@ -9,7 +9,7 @@ import {
   Vector3,
   type Texture,
 } from 'three'
-import { DEFAULT_PALETTE, PALETTES, type CosinePalette } from '../config/palettes'
+import { PALETTES, type CosinePalette } from '../config/palettes'
 import { SimulationEngine, SIMULATION_SIZE } from '../gpgpu/SimulationEngine'
 import { ForceDirector } from '../input/ForceDirector'
 import particleFragment from '../shaders/particle.frag?raw'
@@ -55,7 +55,7 @@ export function ParticleField() {
   const director = useMemo(() => new ForceDirector(), [])
 
   const { geometry, material, uniforms } = useMemo(() => {
-    const uniforms = createParticleUniforms(PALETTES[DEFAULT_PALETTE])
+    const uniforms = createParticleUniforms(PALETTES[useSimulationStore.getState().palette])
     const material = new ShaderMaterial({
       vertexShader: particleVertex,
       fragmentShader: particleFragment,
