@@ -29,14 +29,16 @@ export class AutonomousFlow {
   private clock = INITIAL_CLOCK
   private burstPending = false
 
-  advance(delta: number): void {
+  /** Advances the attractor. A calm flow keeps moving but never gathers or bursts. */
+  advance(delta: number, calm = false): void {
     const dt = Math.min(delta, MAX_TIME_STEP)
     const previousPhase = (this.clock % CYCLE_SECONDS) / CYCLE_SECONDS
     this.clock += dt
     const phase = (this.clock % CYCLE_SECONDS) / CYCLE_SECONDS
 
-    if (previousPhase < RELEASE && phase >= RELEASE && !REDUCED_MOTION) this.burstPending = true
-    this.pinch = phase < RELEASE ? MathUtils.smoothstep(phase, GATHER_START, GATHER_FULL) : 0
+    const quiet = calm || REDUCED_MOTION
+    if (previousPhase < RELEASE && phase >= RELEASE && !quiet) this.burstPending = true
+    this.pinch = phase < RELEASE && !calm ? MathUtils.smoothstep(phase, GATHER_START, GATHER_FULL) : 0
 
     // The trajectory slows while gathering so the gravity well can hold on to its disc.
     this.integrate(dt * TIME_SCALE * (1 - 0.85 * this.pinch))

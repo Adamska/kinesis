@@ -37,8 +37,8 @@ const normal = new Vector3()
 /** Turns raw hand landmarks into the smoothed, distance-invariant metrics the simulation reads. */
 export class GestureExtractor {
   private readonly hand: TrackedHand
-  private readonly x = new OneEuroFilter(1.2, 4)
-  private readonly y = new OneEuroFilter(1.2, 4)
+  private readonly x = new OneEuroFilter(1.5, 10, 3)
+  private readonly y = new OneEuroFilter(1.5, 10, 3)
   private readonly depth = new OneEuroFilter(0.5, 0.5)
   private lastSampleAt = 0
   private pinchedSince = Number.NEGATIVE_INFINITY
@@ -101,6 +101,8 @@ export class GestureExtractor {
     const blend = dt > 0 ? 1 - Math.exp(-dt * VELOCITY_RATE) : 0
     hand.vx = dt > 0 ? hand.vx + ((hand.x - previousX) / dt - hand.vx) * blend : 0
     hand.vy = dt > 0 ? hand.vy + ((hand.y - previousY) / dt - hand.vy) * blend : 0
+    if (dt === 0) hand.path.reset()
+    hand.path.push(now, hand.x, hand.y)
     hand.depth = this.depth.filter(depth, dt)
     // Relaxed fingers often sit partly closed; a dead zone keeps them from opening a
     // weak gravity well the user never asked for.
@@ -163,6 +165,7 @@ export class GestureExtractor {
 
   release(): void {
     this.hand.visible = false
+    this.hand.path.reset()
     this.x.reset()
     this.y.reset()
     this.depth.reset()

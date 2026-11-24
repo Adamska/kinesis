@@ -5,6 +5,7 @@ import { REDUCED_MOTION } from '../config/motion'
 import type { PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
 import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from '../vision/handTopology'
+import { HandPath } from '../vision/HandPath'
 import type { TrackerStage } from '../vision/HandTracker'
 import { readUrlSettings } from './urlSettings'
 
@@ -19,9 +20,11 @@ export interface TrackedHand {
   /** Mirrored normalized device coordinates of the palm center, each in [-1, 1]. */
   x: number
   y: number
-  /** Filtered velocity of x and y in units per second, used to extrapolate past latency. */
+  /** Filtered velocity of x and y in units per second. */
   vx: number
   vy: number
+  /** Recent filtered positions, for smooth playback between camera frames. */
+  path: HandPath
   /** Apparent hand size mapped to [-1, 1]; positive means closer to the camera. */
   depth: number
   pinch: number
@@ -67,6 +70,7 @@ export const simulationBridge: SimulationBridge = {
     y: 0,
     vx: 0,
     vy: 0,
+    path: new HandPath(),
     depth: 0,
     pinch: 0,
     burstPending: false,

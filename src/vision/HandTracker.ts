@@ -17,7 +17,7 @@ const DEFAULT_ASPECT = 4 / 3
 function openCamera(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
     audio: false,
-    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 60 } },
   })
 }
 
