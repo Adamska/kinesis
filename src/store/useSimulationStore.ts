@@ -40,6 +40,8 @@ export interface Telemetry {
 
 export interface SimulationBridge extends ForceField {
   hands: TrackedHand[]
+  /** Set by the keyboard to fire a shockwave from every active force point. */
+  burstRequested: boolean
   telemetry: Telemetry
 }
 
@@ -50,6 +52,7 @@ export interface SimulationBridge extends ForceField {
  */
 export const simulationBridge: SimulationBridge = {
   points: Array.from({ length: FORCE_POINT_COUNT }, (_, index) => createForcePoint(index)),
+  burstRequested: false,
   hands: Array.from({ length: MAX_HANDS }, () => ({
     visible: false,
     seenAt: 0,
@@ -75,11 +78,15 @@ interface SimulationStore {
   vision: VisionStatus
   visionStage: TrackerStage
   showFeed: boolean
+  zen: boolean
+  shortcutsOpen: boolean
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
   setVision: (vision: VisionStatus) => void
   setVisionStage: (visionStage: TrackerStage) => void
   toggleFeed: () => void
+  toggleZen: () => void
+  setShortcutsOpen: (open: boolean) => void
 }
 
 export const useSimulationStore = create<SimulationStore>()((set) => ({
@@ -88,9 +95,13 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   vision: 'idle',
   visionStage: 'permission',
   showFeed: true,
+  zen: false,
+  shortcutsOpen: false,
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
   setVision: (vision) => set({ vision }),
   setVisionStage: (visionStage) => set({ visionStage }),
   toggleFeed: () => set((state) => ({ showFeed: !state.showFeed })),
+  toggleZen: () => set((state) => ({ zen: !state.zen })),
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 }))

@@ -5,6 +5,7 @@ const POINTER_GUIDE = [
   ['Hold', 'Singularity'],
   ['Release', 'Shockwave'],
   ['Two fingers', 'Twin vortices'],
+  ['Keyboard', 'Press ?'],
 ] as const
 
 const TRACKING_GUIDE = [
@@ -13,6 +14,7 @@ const TRACKING_GUIDE = [
   ['Snap open', 'Shockwave'],
   ['Tilt palm', 'Spin axis'],
   ['Two hands', 'Twin vortices'],
+  ['Keyboard', 'Press ?'],
 ] as const
 
 export function InteractionGuide() {

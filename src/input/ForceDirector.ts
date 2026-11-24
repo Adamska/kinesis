@@ -77,6 +77,10 @@ export class ForceDirector {
     }
 
     const source = this.gather(performance.now(), camera)
+    if (simulationBridge.burstRequested) {
+      simulationBridge.burstRequested = false
+      for (const input of this.inputs) input.burst ||= input.active
+    }
     const { points, telemetry } = simulationBridge
     let pinch = 0
     let impulse = 0
