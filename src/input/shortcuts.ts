@@ -45,6 +45,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   { keys: [' '], label: 'Space', action: 'Shockwave', run: () => (simulationBridge.burstRequested = true) },
   { keys: ['[', ']'], label: '[ ]', action: 'Turbulence', run: (key) => nudgeTurbulence(key === ']' ? 1 : -1) },
+  { keys: ['t'], label: 'T', action: 'Light trails', run: () => useSimulationStore.getState().toggleTrails() },
   { keys: ['a'], label: 'A', action: 'Sound', run: () => void toggleSound() },
   { keys: ['m'], label: 'M', action: 'Microphone', run: () => void toggleMic() },
   { keys: ['r'], label: 'R', action: 'Record clip', run: toggleRecording },

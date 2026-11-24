@@ -1,6 +1,7 @@
 import { Vector3 } from 'three'
 import { create } from 'zustand'
 import type { DensityId } from '../config/density'
+import { REDUCED_MOTION } from '../config/motion'
 import type { PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
 import type { ShapeId } from '../gpgpu/shapeTargets'
@@ -89,6 +90,7 @@ interface SimulationStore {
   shortcutsOpen: boolean
   sound: boolean
   mic: MicStatus
+  trails: boolean
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
   setShape: (shape: ShapeId) => void
@@ -100,6 +102,7 @@ interface SimulationStore {
   setShortcutsOpen: (open: boolean) => void
   setSound: (sound: boolean) => void
   setMic: (mic: MicStatus) => void
+  toggleTrails: () => void
 }
 
 export const useSimulationStore = create<SimulationStore>()((set) => ({
@@ -111,6 +114,7 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   shortcutsOpen: false,
   sound: false,
   mic: 'off',
+  trails: !REDUCED_MOTION,
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
   setShape: (shape) => set({ shape }),
@@ -122,4 +126,5 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSound: (sound) => set({ sound }),
   setMic: (mic) => set({ mic }),
+  toggleTrails: () => set((state) => ({ trails: !state.trails })),
 }))

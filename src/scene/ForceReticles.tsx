@@ -1,11 +1,13 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import { AdditiveBlending, Color, Mesh, PlaneGeometry, ShaderMaterial } from 'three'
+import { AdditiveBlending, Color, Mesh, PlaneGeometry, Scene, ShaderMaterial } from 'three'
 import reticleFragment from '../shaders/reticle.frag?raw'
 import reticleVertex from '../shaders/reticle.vert?raw'
 import { simulationBridge } from '../store/useSimulationStore'
 
 const EXTENT = 0.95
+// Runs after the post-processing composer (priority 1), drawing on top of its output.
+const OVERLAY_PRIORITY = 2
 const SPIN_RATE = 0.6
 const SIGNAL = new Color('#d7f4ff')
 
@@ -35,12 +37,16 @@ function createReticle(geometry: PlaneGeometry): Mesh<PlaneGeometry, ShaderMater
 /**
  * Hairline reticle at every steered force point: it shows where a hand or finger
  * lands in the volume, tightens as the pinch closes and sends a ring out with each
- * shockwave. It stays dim enough to fall under the bloom threshold.
+ * shockwave. As interface rather than matter, it is drawn in its own scene after
+ * post-processing, so trails, lensing and bloom leave it untouched.
  */
 export function ForceReticles() {
-  const { geometry, reticles } = useMemo(() => {
+  const { geometry, reticles, overlay } = useMemo(() => {
     const geometry = new PlaneGeometry(2, 2)
-    return { geometry, reticles: simulationBridge.points.map(() => createReticle(geometry)) }
+    const reticles = simulationBridge.points.map(() => createReticle(geometry))
+    const overlay = new Scene()
+    overlay.add(...reticles)
+    return { geometry, reticles, overlay }
   }, [])
 
   useEffect(
@@ -51,7 +57,7 @@ export function ForceReticles() {
     [geometry, reticles],
   )
 
-  useFrame((_, delta) => {
+  useFrame(({ gl, camera }, delta) => {
     simulationBridge.points.forEach((point, index) => {
       const reticle = reticles[index]
       const uniforms = reticle.material.uniforms
@@ -64,13 +70,13 @@ export function ForceReticles() {
       const direction = Math.sign(point.axis.z) || 1
       uniforms.uSpin.value += delta * SPIN_RATE * direction * (1 + 4 * point.pinch)
     })
-  })
 
-  return (
-    <>
-      {reticles.map((reticle, index) => (
-        <primitive key={index} object={reticle} />
-      ))}
-    </>
-  )
+    const autoClear = gl.autoClear
+    gl.autoClear = false
+    gl.setRenderTarget(null)
+    gl.render(overlay, camera)
+    gl.autoClear = autoClear
+  }, OVERLAY_PRIORITY)
+
+  return null
 }

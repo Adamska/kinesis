@@ -3,6 +3,7 @@ import { AudioControls } from './AudioControls'
 import { DensitySwitch } from './DensitySwitch'
 import { DockCell } from './DockCell'
 import { FormSwitch } from './FormSwitch'
+import { LookControls } from './LookControls'
 import { PaletteSwitch, TrackingPill, TurbulenceControl } from './PrimaryControls'
 import { RecordToggle } from './RecordToggle'
 
@@ -17,6 +18,9 @@ export function ControlDock() {
       <div className={ROW}>
         <DockCell label="Form">
           <FormSwitch />
+        </DockCell>
+        <DockCell>
+          <LookControls />
         </DockCell>
         <DockCell label="Particles">
           <DensitySwitch />
