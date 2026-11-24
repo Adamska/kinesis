@@ -10,7 +10,6 @@ import {
   type Texture,
 } from 'three'
 import { PALETTES, type CosinePalette } from '../config/palettes'
-import { BodyObstacle } from '../gpgpu/BodyObstacle'
 import { REFERENCE_COUNT } from '../config/density'
 import { SimulationEngine } from '../gpgpu/SimulationEngine'
 import { ForceDirector } from '../input/ForceDirector'
@@ -66,7 +65,6 @@ export function ParticleField({ size }: { size: number }) {
   const engineRef = useRef<SimulationEngine | null>(null)
   const frameTime = useRef(1 / 60)
   const director = useMemo(() => new ForceDirector(), [])
-  const obstacle = useMemo(() => new BodyObstacle(), [])
 
   const { geometry, material, uniforms } = useMemo(() => {
     const uniforms = createParticleUniforms(PALETTES[useSimulationStore.getState().palette], size)
@@ -97,22 +95,19 @@ export function ParticleField({ size }: { size: number }) {
     () => () => {
       geometry.dispose()
       material.dispose()
-      obstacle.dispose()
     },
-    [geometry, material, obstacle],
+    [geometry, material],
   )
 
   useFrame((state, delta) => {
     const engine = engineRef.current
     if (!engine) return
-    const { palette, turbulence, silhouette } = useSimulationStore.getState()
+    const { palette, turbulence } = useSimulationStore.getState()
 
     director.update(delta, state.camera)
-    obstacle.update(simulationBridge.silhouette, silhouette === 'on', state.camera, state.size.width / state.size.height, delta)
     engine.step(delta, {
       forces: simulationBridge,
       turbulence: turbulence * (1 + AUDIO_TURBULENCE_GAIN * simulationBridge.audioLevel),
-      obstacle,
     })
 
     uniforms.uPositions.value = engine.positionTexture

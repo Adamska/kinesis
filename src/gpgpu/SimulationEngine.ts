@@ -15,14 +15,11 @@ import positionFragment from '../shaders/position.frag?raw'
 import seedFragment from '../shaders/seed.frag?raw'
 import simulationVertex from '../shaders/simulation.vert?raw'
 import velocityFragment from '../shaders/velocity.frag?raw'
-import type { BodyObstacle } from './BodyObstacle'
 import type { ForceField } from './forceField'
 import { createFullscreenTriangle, createStateTarget } from './primitives'
 import {
   bindForceMotion,
   bindForces,
-  bindObstacle,
-  createEmptyTexture,
   createForceUniforms,
   createVelocityUniforms,
   FORCE_DEFINES,
@@ -40,8 +37,6 @@ interface PingPong {
 export interface SimulationInputs {
   forces: ForceField
   turbulence: number
-  /** The user's silhouette as an obstacle, or null when segmentation is off. */
-  obstacle: BodyObstacle | null
 }
 
 /*
@@ -67,7 +62,6 @@ export class SimulationEngine {
   private readonly velocity: PingPong
   private readonly positionUniforms = createForceUniforms()
   private readonly velocityUniforms = createVelocityUniforms()
-  private readonly emptyTexture = createEmptyTexture()
   private readonly positionPass: ShaderMaterial
   private readonly velocityPass: ShaderMaterial
   private elapsed = 0
@@ -96,7 +90,7 @@ export class SimulationEngine {
     return this.velocity.read.texture
   }
 
-  step(delta: number, { forces, turbulence, obstacle }: SimulationInputs): void {
+  step(delta: number, { forces, turbulence }: SimulationInputs): void {
     const dt = Math.min(delta, MAX_TIME_STEP)
     this.elapsed += dt
     const previousTarget = this.renderer.getRenderTarget()
@@ -106,7 +100,6 @@ export class SimulationEngine {
     bindForceMotion(velocity, forces)
     velocity.uTime.value = this.elapsed
     velocity.uTurbulence.value = turbulence
-    bindObstacle(velocity, obstacle, this.emptyTexture)
     this.render(this.velocityPass, this.velocity)
 
     // Semi-implicit Euler: positions integrate the velocity computed this frame,
@@ -124,7 +117,6 @@ export class SimulationEngine {
     }
     this.velocityPass.dispose()
     this.positionPass.dispose()
-    this.emptyTexture.dispose()
     this.geometry.dispose()
     this.scene.clear()
   }

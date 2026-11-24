@@ -4,7 +4,7 @@ import { toggleRecording } from '../capture/clipRecorder'
 import { PALETTE_IDS } from '../config/palettes'
 import { clampTurbulence } from '../config/settings'
 import { simulationBridge, useSimulationStore } from '../store/useSimulationStore'
-import { toggleSilhouette, toggleTracking } from '../vision/trackingSession'
+import { toggleTracking } from '../vision/trackingSession'
 
 export interface Shortcut {
   keys: readonly string[]
@@ -40,7 +40,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: ['m'], label: 'M', action: 'Microphone', run: () => void toggleMic() },
   { keys: ['r'], label: 'R', action: 'Record clip', run: toggleRecording },
   { keys: ['w'], label: 'W', action: 'Webcam tracking', run: toggleTracking },
-  { keys: ['b'], label: 'B', action: 'Body silhouette', run: () => void toggleSilhouette() },
   { keys: ['h'], label: 'H', action: 'Hide interface', run: () => useSimulationStore.getState().toggleZen() },
   { keys: ['f'], label: 'F', action: 'Fullscreen', run: toggleFullscreen },
   {

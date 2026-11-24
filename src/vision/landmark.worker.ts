@@ -1,7 +1,6 @@
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision'
 import { LANDMARK_COUNT, LANDMARK_STRIDE, MAX_HANDS } from './handTopology'
 import type { WorkerRequest, WorkerResponse } from './landmarkProtocol'
-import { SilhouetteSegmenter, type VisionFileset } from './silhouetteSegmenter'
 
 // The WASM runtime must match the installed @mediapipe/tasks-vision version exactly.
 const WASM_ROOT = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm'
@@ -19,14 +18,6 @@ interface WorkerScope {
 const scope = self as unknown as WorkerScope
 
 let landmarker: HandLandmarker | null = null
-let runtime: VisionFileset | null = null
-let segmenter: SilhouetteSegmenter | null = null
-let segmenterLoading: Promise<void> | null = null
-let frameCount = 0
-
-// The body moves slowly next to the hands, so it is segmented on every other frame,
-// which keeps the hand latency close to what it is without segmentation.
-const SEGMENTATION_STRIDE = 2
 let receivedBytes = 0
 let lastProgressAt = 0
 
@@ -55,20 +46,18 @@ async function download(url: string, type: string): Promise<Blob> {
 async function initialize(): Promise<void> {
   scope.postMessage({ type: 'stage', stage: 'download' })
   const fileset = await FilesetResolver.forVisionTasks(WASM_ROOT, true)
-  const [runtimeBytes, model] = await Promise.all([
+  const [runtime, model] = await Promise.all([
     download(fileset.wasmBinaryPath, 'application/wasm'),
     download(MODEL_URL, 'application/octet-stream'),
   ])
 
   scope.postMessage({ type: 'stage', stage: 'compile' })
   // MediaPipe is handed the bytes that were just downloaded, so nothing is fetched twice.
-  // The object URL stays alive for tasks created later, such as the segmenter.
-  const tasks = { ...fileset, wasmBinaryPath: URL.createObjectURL(runtimeBytes) }
-  runtime = tasks
+  const wasmBinaryPath = URL.createObjectURL(runtime)
   const modelAssetBuffer = new Uint8Array(await model.arrayBuffer())
   const create = (delegate: 'GPU' | 'CPU') =>
     HandLandmarker.createFromOptions(
-      tasks,
+      { ...fileset, wasmBinaryPath },
       {
         baseOptions: { modelAssetBuffer, delegate },
         canvas: new OffscreenCanvas(1, 1),
@@ -80,6 +69,7 @@ async function initialize(): Promise<void> {
       },
     )
   landmarker = await create('GPU').catch(() => create('CPU'))
+  URL.revokeObjectURL(wasmBinaryPath)
 
   // The first inference compiles the delegate's shaders; paying for it here keeps
   // the first real camera frame fast.
@@ -88,30 +78,9 @@ async function initialize(): Promise<void> {
   scope.postMessage({ type: 'ready' })
 }
 
-function setSegmentation(enabled: boolean): void {
-  if (!enabled) {
-    segmenter?.close()
-    segmenter = null
-    return
-  }
-  if (segmenter || segmenterLoading || !runtime) return
-  segmenterLoading = SilhouetteSegmenter.create(runtime).then(
-    (instance) => {
-      segmenter = instance
-      segmenterLoading = null
-      scope.postMessage({ type: 'segmentation', available: true })
-    },
-    () => {
-      segmenterLoading = null
-      scope.postMessage({ type: 'segmentation', available: false })
-    },
-  )
-}
-
 function detect(bitmap: ImageBitmap): void {
   const startedAt = performance.now()
   const hands: Float32Array[] = []
-  let mask: Uint8Array | null
   try {
     const result = landmarker?.detectForVideo(bitmap, startedAt)
     for (const hand of result?.landmarks ?? []) {
@@ -124,23 +93,16 @@ function detect(bitmap: ImageBitmap): void {
       }
       hands.push(packed)
     }
-    mask = segmenter && frameCount++ % SEGMENTATION_STRIDE === 0 ? segmenter.segment(bitmap, startedAt) : null
   } finally {
     bitmap.close()
   }
   const inferenceMs = performance.now() - startedAt
-  const transfer: Transferable[] = hands.map((hand) => hand.buffer)
-  if (mask) transfer.push(mask.buffer)
-  scope.postMessage({ type: 'result', hands, mask, inferenceMs }, transfer)
+  scope.postMessage({ type: 'result', hands, inferenceMs }, hands.map((hand) => hand.buffer))
 }
 
 scope.addEventListener('message', ({ data }) => {
   if (data.type === 'frame') {
     detect(data.bitmap)
-    return
-  }
-  if (data.type === 'segmentation') {
-    setSegmentation(data.enabled)
     return
   }
   initialize().catch((error: unknown) => {
