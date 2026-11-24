@@ -1,7 +1,6 @@
-import { Vector3 } from 'three'
 import { create } from 'zustand'
 import { DEFAULT_PALETTE, type PaletteId } from '../config/palettes'
-import type { ForceField } from '../gpgpu/SimulationEngine'
+import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
 import { LANDMARK_COUNT } from '../vision/handTopology'
 import type { TrackerStage } from '../vision/HandTracker'
 
@@ -44,10 +43,7 @@ export interface SimulationBridge extends ForceField {
  * so nothing on the hot path ever schedules a render.
  */
 export const simulationBridge: SimulationBridge = {
-  handPos: new Vector3(),
-  handVelocity: new Vector3(),
-  pinchStrength: 0,
-  shockwaveImpulse: 0,
+  points: Array.from({ length: FORCE_POINT_COUNT }, (_, index) => createForcePoint(index)),
   hand: {
     visible: false,
     seenAt: 0,

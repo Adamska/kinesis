@@ -4,6 +4,7 @@ import {
   OrthographicCamera,
   Scene,
   ShaderMaterial,
+  Vector2,
   Vector3,
   type BufferGeometry,
   type IUniform,
@@ -16,6 +17,7 @@ import positionFragment from '../shaders/position.frag?raw'
 import seedFragment from '../shaders/seed.frag?raw'
 import simulationVertex from '../shaders/simulation.vert?raw'
 import velocityFragment from '../shaders/velocity.frag?raw'
+import { FORCE_POINT_COUNT, type ForceField } from './forceField'
 import { createFullscreenTriangle, createStateTarget } from './primitives'
 import { createSeedState } from './seedState'
 
@@ -24,26 +26,22 @@ export const PARTICLE_COUNT = SIMULATION_SIZE * SIMULATION_SIZE
 
 const MAX_TIME_STEP = 1 / 30
 
-export interface ForceField {
-  handPos: Vector3
-  handVelocity: Vector3
-  pinchStrength: number
-  shockwaveImpulse: number
-}
-
 interface PingPong {
   read: WebGLRenderTarget
   write: WebGLRenderTarget
 }
 
+const vectors = <T>(create: () => T): T[] => Array.from({ length: FORCE_POINT_COUNT }, create)
+
 const createForceUniforms = () => ({
   uPosition: { value: null as Texture | null },
   uVelocity: { value: null as Texture | null },
   uDelta: { value: 0 },
-  uHandPos: { value: new Vector3() },
-  uPinchStrength: { value: 0 },
-  uShockwaveImpulse: { value: 0 },
+  uForcePosition: { value: vectors(() => new Vector3()) },
+  uForceDrive: { value: vectors(() => new Vector2()) },
 })
+
+const FORCE_DEFINES = { FORCE_COUNT: FORCE_POINT_COUNT }
 
 /*
  * State layout, one texel per particle on a size x size grid:
@@ -71,7 +69,8 @@ export class SimulationEngine {
     ...createForceUniforms(),
     uTime: { value: 0 },
     uTurbulence: { value: 1 },
-    uHandVelocity: { value: new Vector3() },
+    uForceVelocity: { value: vectors(() => new Vector3()) },
+    uForceAxis: { value: vectors(() => new Vector3()) },
   }
   private readonly positionPass: ShaderMaterial
   private readonly velocityPass: ShaderMaterial
@@ -110,7 +109,10 @@ export class SimulationEngine {
     this.bindState(velocity, dt, forces)
     velocity.uTime.value = this.elapsed
     velocity.uTurbulence.value = turbulence
-    velocity.uHandVelocity.value.copy(forces.handVelocity)
+    forces.points.forEach((point, index) => {
+      velocity.uForceVelocity.value[index].copy(point.velocity)
+      velocity.uForceAxis.value[index].copy(point.axis)
+    })
     this.render(this.velocityPass, this.velocity)
 
     // Semi-implicit Euler: positions integrate the velocity computed this frame,
@@ -140,9 +142,10 @@ export class SimulationEngine {
     uniforms.uPosition.value = this.position.read.texture
     uniforms.uVelocity.value = this.velocity.read.texture
     uniforms.uDelta.value = dt
-    uniforms.uHandPos.value.copy(forces.handPos)
-    uniforms.uPinchStrength.value = forces.pinchStrength
-    uniforms.uShockwaveImpulse.value = forces.shockwaveImpulse
+    forces.points.forEach((point, index) => {
+      uniforms.uForcePosition.value[index].copy(point.position)
+      uniforms.uForceDrive.value[index].set(point.pinch, point.impulse)
+    })
   }
 
   private createPass(fragmentShader: string, uniforms: Record<string, IUniform>): ShaderMaterial {
@@ -150,6 +153,7 @@ export class SimulationEngine {
       vertexShader: simulationVertex,
       fragmentShader,
       uniforms,
+      defines: FORCE_DEFINES,
       blending: NoBlending,
       depthTest: false,
       depthWrite: false,

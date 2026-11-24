@@ -3,10 +3,11 @@ uniform sampler2D uVelocity;
 uniform float uTime;
 uniform float uDelta;
 uniform float uTurbulence;
-uniform vec3 uHandPos;
-uniform vec3 uHandVelocity;
-uniform float uPinchStrength;
-uniform float uShockwaveImpulse;
+uniform vec3 uForcePosition[FORCE_COUNT];
+uniform vec3 uForceVelocity[FORCE_COUNT];
+uniform vec3 uForceAxis[FORCE_COUNT];
+// x = pinch strength, y = shockwave impulse.
+uniform vec2 uForceDrive[FORCE_COUNT];
 
 varying vec2 vUv;
 
@@ -17,7 +18,6 @@ const float REST_RADIUS = 1.55;
 const float CONFINEMENT_STIFFNESS = 6.0;
 const float MAX_SPEED = 7.0;
 
-const vec3 ORBIT_AXIS = vec3(0.279, 0.930, 0.239);
 const float PINCH_MASS = 4.2;
 const float PINCH_CORE = 0.3;
 const float PINCH_RADIUS = 0.8;
@@ -48,16 +48,23 @@ void main() {
   float flowMagnitude = length(flow);
   flow *= FLOW_SPEED * uTurbulence * (1.0 + 0.3 * sin(TAU * phase));
 
-  vec3 toParticle = location - uHandPos;
-  float dist = length(toParticle);
-  vec3 radial = toParticle / max(dist, 1e-4);
-  float well = uPinchStrength * exp(-dist * dist / (PINCH_RADIUS * PINCH_RADIUS));
+  // Each force point contributes a well, a shockwave and a drag term. The wells
+  // are summed first because their total decides how loosely matter couples to the
+  // carrier flow.
+  float wells[FORCE_COUNT];
+  float wellTotal = 0.0;
+  for (int i = 0; i < FORCE_COUNT; i++) {
+    vec3 offset = location - uForcePosition[i];
+    wells[i] = uForceDrive[i].x * exp(-dot(offset, offset) / (PINCH_RADIUS * PINCH_RADIUS));
+    wellTotal += wells[i];
+  }
+  wellTotal = min(wellTotal, 1.0);
 
   // Stokes drag toward the carrier flow. Each particle has its own response time, so
   // the cloud behaves like inertial tracers and concentrates into filaments between
-  // vortices. Inside the pinch well the coupling loosens so orbits keep their speed.
+  // vortices. Inside a pinch well the coupling loosens so orbits keep their speed.
   float responseTime = mix(0.25, 0.7, hash(vUv));
-  float coupling = (1.0 - exp(-uDelta / responseTime)) * (1.0 - 0.92 * well);
+  float coupling = (1.0 - exp(-uDelta / responseTime)) * (1.0 - 0.92 * wellTotal);
   velocity += (flow - velocity) * coupling;
 
   vec3 acceleration = vec3(0.0);
@@ -68,28 +75,37 @@ void main() {
   float excess = max(radius - REST_RADIUS, 0.0);
   acceleration -= location * (CONFINEMENT_STIFFNESS * excess / max(radius, 1e-4));
 
-  // Pinch: Plummer-softened gravity well, a = -GM r / (r^2 + e^2)^(3/2). The matching
-  // circular orbital speed is v_c(r) = r sqrt(GM / (r^2 + e^2)^(3/2)). Steering toward
-  // v_c along the tangent (axis x radial) with a slow inward drift feeds the cloud
-  // angular momentum, so it spirals into a dense disc instead of collapsing to a point.
-  float softened = dist * dist + PINCH_CORE * PINCH_CORE;
-  float gravity = PINCH_MASS / (softened * sqrt(softened));
-  vec3 tangent = cross(ORBIT_AXIS, radial);
-  vec3 orbit = tangent * dist * sqrt(gravity)
-    - radial * PINCH_INFLOW * smoothstep(PINCH_CORE, 3.0 * PINCH_CORE, dist);
-  acceleration -= toParticle * gravity * well;
-  velocity += (orbit - velocity) * well * (1.0 - exp(-uDelta * PINCH_STEERING));
+  for (int i = 0; i < FORCE_COUNT; i++) {
+    vec3 toParticle = location - uForcePosition[i];
+    float dist = length(toParticle);
+    vec3 radial = toParticle / max(dist, 1e-4);
+    float well = wells[i];
 
-  // Shockwave: the impulse decays from 1 to 0 on the CPU, so (1 - impulse) is the
-  // normalized age of the blast. A Gaussian shell rides the expanding front and
-  // kicks whatever it sweeps over radially outward.
-  float front = (1.0 - uShockwaveImpulse) * SHOCK_REACH;
-  float shell = exp(-pow((dist - front) / SHOCK_WIDTH, 2.0));
-  acceleration += radial * uShockwaveImpulse * SHOCK_GAIN * shell;
+    // Pinch: Plummer-softened gravity well, a = -GM r / (r^2 + e^2)^(3/2). The
+    // matching circular orbital speed is v_c(r) = r sqrt(GM / (r^2 + e^2)^(3/2)).
+    // Steering toward v_c along the tangent (axis x radial) with a slow inward drift
+    // feeds the cloud angular momentum, so it spirals into a dense disc instead of
+    // collapsing to a point.
+    float softened = dist * dist + PINCH_CORE * PINCH_CORE;
+    float gravity = PINCH_MASS / (softened * sqrt(softened));
+    vec3 tangent = cross(uForceAxis[i], radial);
+    vec3 orbit = tangent * dist * sqrt(gravity)
+      - radial * PINCH_INFLOW * smoothstep(PINCH_CORE, 3.0 * PINCH_CORE, dist);
+    acceleration -= toParticle * gravity * well;
+    velocity += (orbit - velocity) * well * (1.0 - exp(-uDelta * PINCH_STEERING));
 
-  // Translation: entrain nearby fluid along the hand's velocity vector.
-  float reach = exp(-dist * dist / (DRAG_RADIUS * DRAG_RADIUS));
-  acceleration += uHandVelocity * DRAG_GAIN * reach;
+    // Shockwave: the impulse decays from 1 to 0 on the CPU, so (1 - impulse) is the
+    // normalized age of the blast. A Gaussian shell rides the expanding front and
+    // kicks whatever it sweeps over radially outward.
+    float impulse = uForceDrive[i].y;
+    float front = (1.0 - impulse) * SHOCK_REACH;
+    float shell = exp(-pow((dist - front) / SHOCK_WIDTH, 2.0));
+    acceleration += radial * impulse * SHOCK_GAIN * shell;
+
+    // Translation: entrain nearby fluid along the force point's velocity.
+    float reach = exp(-dist * dist / (DRAG_RADIUS * DRAG_RADIUS));
+    acceleration += uForceVelocity[i] * DRAG_GAIN * reach;
+  }
 
   velocity += acceleration * uDelta;
   velocity *= min(1.0, MAX_SPEED / max(length(velocity), 1e-4));

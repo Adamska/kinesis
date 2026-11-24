@@ -1,4 +1,5 @@
 import { Vector3, type Camera } from 'three'
+import { DEFAULT_ORBIT_AXIS, FORCE_POINT_COUNT, type ForcePoint } from '../gpgpu/forceField'
 import { simulationBridge, type InputSource } from '../store/useSimulationStore'
 import { AutonomousFlow } from './AutonomousFlow'
 import { PointerField } from './PointerField'
@@ -6,6 +7,7 @@ import { PointerField } from './PointerField'
 const FOLLOW_RATE = 14
 const VELOCITY_RATE = 10
 const PINCH_RATE = 9
+const AXIS_RATE = 6
 const SHOCKWAVE_DECAY = 3.2
 const SHOCKWAVE_FLOOR = 0.004
 const MAX_HAND_SPEED = 7
@@ -17,13 +19,22 @@ const HAND_REACH = 2.2
 // intent, so tracked motion is amplified to stir the fluid just as hard.
 const VELOCITY_GAIN: Record<InputSource, number> = { autonomous: 1, pointer: 1, tracking: 2.4 }
 
+interface ForceInput {
+  active: boolean
+  target: Vector3
+  pinch: number
+  burst: boolean
+  /** Spin axis requested by the input, or null to fall back to the default. */
+  axis: Vector3 | null
+}
+
 /**
  * Projects a normalized device coordinate onto the plane through the origin that
  * faces the camera: the ray p(t) = eye + t * dir meets the plane where
  * dot(p, forward) = 0, giving t = -dot(eye, forward) / dot(dir, forward).
  * `lift` then moves the point off the plane toward the camera.
  */
-function projectToFocalPlane(camera: Camera, x: number, y: number, lift: number, out: Vector3): Vector3 {
+export function projectToFocalPlane(camera: Camera, x: number, y: number, lift: number, out: Vector3): Vector3 {
   const eye = camera.position
   camera.getWorldDirection(forward)
   direction.set(x, y, 0.5).unproject(camera).sub(eye).normalize()
@@ -33,28 +44,51 @@ function projectToFocalPlane(camera: Camera, x: number, y: number, lift: number,
 
 const forward = new Vector3()
 const direction = new Vector3()
+const previous = new Vector3()
+const velocity = new Vector3()
+const fallbackAxis = new Vector3()
 
-/** Picks the active input source each frame and resolves it into the shared force field. */
+/** Picks the active input source each frame and resolves it into the shared force points. */
 export class ForceDirector {
   readonly pointer = new PointerField()
 
   private readonly autonomous = new AutonomousFlow()
-  private readonly target = new Vector3()
-  private readonly previous = new Vector3()
-  private readonly velocity = new Vector3()
+  private readonly inputs: ForceInput[] = Array.from({ length: FORCE_POINT_COUNT }, () => ({
+    active: false,
+    target: new Vector3(),
+    pinch: 0,
+    burst: false,
+    axis: null,
+  }))
+  private readonly wasActive: boolean[] = Array.from({ length: FORCE_POINT_COUNT }, () => false)
 
   update(delta: number, camera: Camera): void {
-    const bridge = simulationBridge
     const dt = Math.max(delta, 1e-4)
-    let source: InputSource
-    let pinchTarget: number
-    let burst: boolean
-
-    const now = performance.now()
-    const hand = bridge.hand
     this.autonomous.advance(delta)
+    for (const input of this.inputs) {
+      input.active = false
+      input.burst = false
+      input.axis = null
+    }
+
+    const source = this.gather(performance.now(), camera)
+    const { points, telemetry } = simulationBridge
+    let pinch = 0
+    let impulse = 0
+    points.forEach((point, index) => {
+      this.resolve(point, index, dt, VELOCITY_GAIN[source])
+      pinch = Math.max(pinch, point.pinch)
+      impulse = Math.max(impulse, point.impulse)
+    })
+
+    telemetry.source = source
+    telemetry.gesture = impulse > 0.3 ? 'shockwave' : pinch > 0.5 ? 'pinch' : 'flow'
+  }
+
+  /** Fills the per-point inputs from the highest-priority live source. */
+  private gather(now: number, camera: Camera): InputSource {
+    const hand = simulationBridge.hand
     if (hand.visible && now - hand.seenAt < HAND_STALE_MS) {
-      source = 'tracking'
       // The focal plane spans distance / P00 by distance / P11 world units from its
       // center. Scaling by HAND_REACH over that extent keeps a fully extended hand
       // inside the cloud instead of out at the edge of a wide viewport.
@@ -62,38 +96,60 @@ export class ForceDirector {
       const distance = camera.position.length()
       const x = hand.x * Math.min(1, (HAND_REACH * elements[0]) / distance)
       const y = hand.y * Math.min(1, (HAND_REACH * elements[5]) / distance)
-      projectToFocalPlane(camera, x, y, hand.depth * HAND_DEPTH_RANGE, this.target)
-      pinchTarget = hand.pinch
-      burst = hand.burstPending
+      const input = this.inputs[0]
+      projectToFocalPlane(camera, x, y, hand.depth * HAND_DEPTH_RANGE, input.target)
+      input.active = true
+      input.pinch = hand.pinch
+      input.burst = hand.burstPending
       hand.burstPending = false
-    } else if (this.pointer.isEngaged(now)) {
-      source = 'pointer'
-      projectToFocalPlane(camera, this.pointer.x, this.pointer.y, 0, this.target)
-      pinchTarget = this.pointer.pressed ? 1 : 0
-      burst = this.pointer.consumeRelease()
-    } else {
-      source = 'autonomous'
-      this.target.copy(this.autonomous.position)
-      pinchTarget = this.autonomous.pinch
-      burst = this.autonomous.consumeBurst()
+      return 'tracking'
     }
 
-    this.previous.copy(bridge.handPos)
-    bridge.handPos.lerp(this.target, 1 - Math.exp(-dt * FOLLOW_RATE))
-    this.velocity
-      .subVectors(bridge.handPos, this.previous)
-      .divideScalar(dt)
-      .multiplyScalar(VELOCITY_GAIN[source])
-      .clampLength(0, MAX_HAND_SPEED)
-    bridge.handVelocity.lerp(this.velocity, 1 - Math.exp(-dt * VELOCITY_RATE))
+    const contacts = this.pointer.contacts
+    if (contacts.some((contact) => this.pointer.isEngaged(contact, now))) {
+      contacts.forEach((contact, index) => {
+        const input = this.inputs[index]
+        input.burst = this.pointer.consumeRelease(contact)
+        if (!this.pointer.isEngaged(contact, now)) return
+        projectToFocalPlane(camera, contact.x, contact.y, 0, input.target)
+        input.active = true
+        input.pinch = contact.pressed ? 1 : 0
+      })
+      return 'pointer'
+    }
 
-    bridge.pinchStrength += (pinchTarget - bridge.pinchStrength) * (1 - Math.exp(-dt * PINCH_RATE))
-    bridge.shockwaveImpulse *= Math.exp(-dt * SHOCKWAVE_DECAY)
-    if (burst) bridge.shockwaveImpulse = 1
-    if (bridge.shockwaveImpulse < SHOCKWAVE_FLOOR) bridge.shockwaveImpulse = 0
+    const input = this.inputs[0]
+    input.active = true
+    input.target.copy(this.autonomous.position)
+    input.pinch = this.autonomous.pinch
+    input.burst = this.autonomous.consumeBurst()
+    return 'autonomous'
+  }
 
-    bridge.telemetry.source = source
-    bridge.telemetry.gesture =
-      bridge.shockwaveImpulse > 0.3 ? 'shockwave' : bridge.pinchStrength > 0.5 ? 'pinch' : 'flow'
+  private resolve(point: ForcePoint, index: number, dt: number, gain: number): void {
+    const input = this.inputs[index]
+    // A point that was idle snaps to its new input, so a second finger touching down
+    // does not sweep across the cloud from wherever its point was last left.
+    if (input.active && !this.wasActive[index]) point.position.copy(input.target)
+    this.wasActive[index] = input.active
+
+    previous.copy(point.position)
+    if (input.active) point.position.lerp(input.target, 1 - Math.exp(-dt * FOLLOW_RATE))
+    velocity.subVectors(point.position, previous).divideScalar(dt).multiplyScalar(gain).clampLength(0, MAX_HAND_SPEED)
+    point.velocity.lerp(velocity, 1 - Math.exp(-dt * VELOCITY_RATE))
+
+    const pinchTarget = input.active ? input.pinch : 0
+    point.pinch += (pinchTarget - point.pinch) * (1 - Math.exp(-dt * PINCH_RATE))
+
+    point.impulse *= Math.exp(-dt * SHOCKWAVE_DECAY)
+    if (input.burst) point.impulse = 1
+    if (point.impulse < SHOCKWAVE_FLOOR) point.impulse = 0
+
+    const spin = index % 2 === 0 ? 1 : -1
+    const axisTarget = input.axis ?? fallbackAxis.copy(DEFAULT_ORBIT_AXIS).multiplyScalar(spin)
+    point.axis.lerp(axisTarget, 1 - Math.exp(-dt * AXIS_RATE))
+    // Blending toward the opposite axis passes through zero; take the target there.
+    if (point.axis.lengthSq() < 1e-4) point.axis.copy(axisTarget)
+    point.axis.normalize()
   }
 }

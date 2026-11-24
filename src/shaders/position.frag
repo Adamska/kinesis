@@ -1,9 +1,9 @@
 uniform sampler2D uPosition;
 uniform sampler2D uVelocity;
 uniform float uDelta;
-uniform vec3 uHandPos;
-uniform float uPinchStrength;
-uniform float uShockwaveImpulse;
+uniform vec3 uForcePosition[FORCE_COUNT];
+// x = pinch strength, y = shockwave impulse.
+uniform vec2 uForceDrive[FORCE_COUNT];
 
 varying vec2 vUv;
 
@@ -18,10 +18,12 @@ void main() {
   vec3 location = state.xyz + velocity * uDelta;
   location *= min(1.0, ESCAPE_RADIUS / max(length(location), 1e-4));
 
-  vec3 toParticle = location - uHandPos;
-  float proximity = exp(-dot(toParticle, toParticle) / (FIELD_RADIUS * FIELD_RADIUS));
-  float excitation = 0.5 * dot(velocity, velocity)
-    + 2.0 * proximity * max(uPinchStrength, uShockwaveImpulse);
+  float excitation = 0.5 * dot(velocity, velocity);
+  for (int i = 0; i < FORCE_COUNT; i++) {
+    vec3 toParticle = location - uForcePosition[i];
+    float proximity = exp(-dot(toParticle, toParticle) / (FIELD_RADIUS * FIELD_RADIUS));
+    excitation += 2.0 * proximity * max(uForceDrive[i].x, uForceDrive[i].y);
+  }
 
   // Energy charges fast and bleeds off slowly, so wakes stay luminous for a moment
   // after the force field has moved on.
