@@ -2,6 +2,7 @@ uniform sampler2D uPositions;
 uniform sampler2D uVelocities;
 uniform vec2 uResolution;
 uniform float uParticleSize;
+uniform float uDensityGain;
 
 varying vec2 vAxis;
 varying float vStretch;
@@ -45,5 +46,5 @@ void main() {
 
   // Sprites below MIN_POINT_SIZE are clamped up, and stretching spreads a sprite over
   // a longer streak. Scaling opacity by both area ratios keeps emitted light constant.
-  vOpacity = (diameter * diameter) / (size * size) / vStretch;
+  vOpacity = (diameter * diameter) / (size * size) / vStretch * uDensityGain;
 }

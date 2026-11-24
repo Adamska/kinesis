@@ -1,13 +1,13 @@
 import { useRef, type ReactNode } from 'react'
-import { PARTICLE_COUNT, SIMULATION_SIZE } from '../../gpgpu/SimulationEngine'
-import { simulationBridge } from '../../store/useSimulationStore'
+import { DENSITIES } from '../../config/density'
+import { simulationBridge, useSimulationStore } from '../../store/useSimulationStore'
 import { useTicker } from './useTicker'
 
 const REFRESH_INTERVAL_MS = 250
 
 function Readout({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-8 border-t border-hairline py-1.5">
+    <div className="flex items-baseline justify-between gap-6 border-t border-hairline py-1.5 whitespace-nowrap">
       <dt className="text-white/40">{label}</dt>
       <dd className="text-white/85 tabular-nums">{children}</dd>
     </div>
@@ -15,6 +15,7 @@ function Readout({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export function TelemetryOverlay() {
+  const { size } = DENSITIES[useSimulationStore((state) => state.density)]
   const fpsRef = useRef<HTMLSpanElement>(null)
   const latencyRef = useRef<HTMLSpanElement>(null)
 
@@ -32,9 +33,9 @@ export function TelemetryOverlay() {
         Kinesis <span className="text-white/35">//</span> GPGPU Fluid Lab
       </h1>
       <dl className="mt-3 px-3">
-        <Readout label="Particles">{PARTICLE_COUNT.toLocaleString('en-US')}</Readout>
+        <Readout label="Particles">{(size * size).toLocaleString('en-US')}</Readout>
         <Readout label="State grid">
-          {SIMULATION_SIZE} x {SIMULATION_SIZE} f16
+          {size} x {size} f16
         </Readout>
         <Readout label="Frame rate">
           <span ref={fpsRef}>0</span> fps

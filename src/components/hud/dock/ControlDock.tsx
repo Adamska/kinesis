@@ -1,5 +1,6 @@
 import { GestureIndicator } from '../GestureIndicator'
 import { AudioControls } from './AudioControls'
+import { DensitySwitch } from './DensitySwitch'
 import { DockCell } from './DockCell'
 import { FormSwitch } from './FormSwitch'
 import { PaletteSwitch, TrackingPill, TurbulenceControl } from './PrimaryControls'
@@ -16,6 +17,9 @@ export function ControlDock() {
       <div className={ROW}>
         <DockCell label="Form">
           <FormSwitch />
+        </DockCell>
+        <DockCell label="Particles">
+          <DensitySwitch />
         </DockCell>
         <DockCell label="Audio">
           <AudioControls />

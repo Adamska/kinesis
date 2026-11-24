@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { create } from 'zustand'
+import type { DensityId } from '../config/density'
 import type { PaletteId } from '../config/palettes'
 import { createForcePoint, FORCE_POINT_COUNT, type ForceField } from '../gpgpu/forceField'
 import type { ShapeId } from '../gpgpu/shapeTargets'
@@ -80,6 +81,7 @@ interface SimulationStore {
   palette: PaletteId
   turbulence: number
   shape: ShapeId
+  density: DensityId
   vision: VisionStatus
   visionStage: TrackerStage
   showFeed: boolean
@@ -90,6 +92,7 @@ interface SimulationStore {
   setPalette: (palette: PaletteId) => void
   setTurbulence: (turbulence: number) => void
   setShape: (shape: ShapeId) => void
+  setDensity: (density: DensityId) => void
   setVision: (vision: VisionStatus) => void
   setVisionStage: (visionStage: TrackerStage) => void
   toggleFeed: () => void
@@ -111,6 +114,7 @@ export const useSimulationStore = create<SimulationStore>()((set) => ({
   setPalette: (palette) => set({ palette }),
   setTurbulence: (turbulence) => set({ turbulence }),
   setShape: (shape) => set({ shape }),
+  setDensity: (density) => set({ density }),
   setVision: (vision) => set({ vision }),
   setVisionStage: (visionStage) => set({ visionStage }),
   toggleFeed: () => set((state) => ({ showFeed: !state.showFeed })),

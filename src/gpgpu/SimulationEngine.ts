@@ -28,9 +28,6 @@ import {
 } from './simulationUniforms'
 import { createSeedState } from './seedState'
 
-export const SIMULATION_SIZE = 320
-export const PARTICLE_COUNT = SIMULATION_SIZE * SIMULATION_SIZE
-
 const MAX_TIME_STEP = 1 / 30
 
 interface PingPong {
@@ -75,7 +72,7 @@ export class SimulationEngine {
   private readonly velocityPass: ShaderMaterial
   private elapsed = 0
 
-  constructor(renderer: WebGLRenderer, size = SIMULATION_SIZE) {
+  constructor(renderer: WebGLRenderer, size: number) {
     this.renderer = renderer
     this.size = size
 

@@ -1,4 +1,5 @@
 import { DEFAULT_PALETTE, PALETTE_IDS, type PaletteId } from '../config/palettes'
+import { detectDensity, isDensity, type DensityId } from '../config/density'
 import { REDUCED_MOTION } from '../config/motion'
 import { clampTurbulence, DEFAULT_TURBULENCE } from '../config/settings'
 import { SHAPE_IDS, type ShapeId } from '../gpgpu/shapeTargets'
@@ -8,7 +9,11 @@ export interface SharedSettings {
   palette: PaletteId
   turbulence: number
   shape: ShapeId
+  density: DensityId
 }
+
+// The detected budget is the default, so it is never written into a shared link.
+const detectedDensity = detectDensity()
 
 const isPalette = (value: string | null): value is PaletteId => PALETTE_IDS.some((id) => id === value)
 const isShape = (value: string | null): value is ShapeId => SHAPE_IDS.some((id) => id === value)
@@ -27,7 +32,9 @@ export function readUrlSettings(): SharedSettings {
   const palette = params.get('palette')
   const turbulence = Number.parseFloat(params.get('turbulence') ?? '')
   const shape = params.get('shape')
+  const density = params.get('particles')
   return {
+    density: isDensity(density) ? density : detectedDensity,
     shape: isShape(shape) ? shape : introRequested() ? 'title' : 'fluid',
     palette: isPalette(palette) ? palette : DEFAULT_PALETTE,
     turbulence: Number.isFinite(turbulence) ? clampTurbulence(turbulence) : DEFAULT_TURBULENCE,
@@ -35,7 +42,7 @@ export function readUrlSettings(): SharedSettings {
 }
 
 /** Rewrites the query string in place; defaults are omitted to keep links short. */
-export function writeUrlSettings({ palette, turbulence, shape }: SharedSettings): void {
+export function writeUrlSettings({ palette, turbulence, shape, density }: SharedSettings): void {
   const params = new URLSearchParams(window.location.search)
   const assign = (key: string, value: string, fallback: string) => {
     if (value === fallback) params.delete(key)
@@ -44,6 +51,7 @@ export function writeUrlSettings({ palette, turbulence, shape }: SharedSettings)
   assign('palette', palette, DEFAULT_PALETTE)
   assign('turbulence', turbulence.toFixed(2), DEFAULT_TURBULENCE.toFixed(2))
   assign('shape', shape, 'fluid')
+  assign('particles', density, detectedDensity)
   const query = params.toString()
   const url = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
   if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {

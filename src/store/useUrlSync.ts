@@ -12,7 +12,8 @@ export function useUrlSync(): void {
       const changed =
         state.palette !== previous.palette ||
         state.turbulence !== previous.turbulence ||
-        state.shape !== previous.shape
+        state.shape !== previous.shape ||
+        state.density !== previous.density
       if (!changed) return
       window.clearTimeout(timer)
       timer = window.setTimeout(() => writeUrlSettings(state), WRITE_DELAY_MS)

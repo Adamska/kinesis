@@ -1,5 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { registerCaptureCanvas } from '../capture/clipRecorder'
+import { DENSITIES } from '../config/density'
+import { useSimulationStore } from '../store/useSimulationStore'
 import { AdaptiveResolution, MAX_PIXEL_RATIO } from './AdaptiveResolution'
 import { CameraRig } from './CameraRig'
 import { ForceReticles } from './ForceReticles'
@@ -9,6 +11,8 @@ import { PostProcessingStack } from './PostProcessingStack'
 const VOID_COLOR = '#050608'
 
 export function Stage() {
+  const { size } = DENSITIES[useSimulationStore((state) => state.density)]
+
   return (
     <Canvas
       role="img"
@@ -21,7 +25,8 @@ export function Stage() {
     >
       <color attach="background" args={[VOID_COLOR]} />
       <CameraRig />
-      <ParticleField />
+      {/* A new budget rebuilds the simulation from scratch, so the field is keyed by it. */}
+      <ParticleField key={size} size={size} />
       <ForceReticles />
       <PostProcessingStack />
       <AdaptiveResolution />

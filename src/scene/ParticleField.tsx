@@ -11,7 +11,8 @@ import {
 } from 'three'
 import { PALETTES, type CosinePalette } from '../config/palettes'
 import { ShapeMorph } from '../gpgpu/ShapeMorph'
-import { SimulationEngine, SIMULATION_SIZE } from '../gpgpu/SimulationEngine'
+import { REFERENCE_COUNT } from '../config/density'
+import { SimulationEngine } from '../gpgpu/SimulationEngine'
 import { ForceDirector } from '../input/ForceDirector'
 import particleFragment from '../shaders/particle.frag?raw'
 import particleVertex from '../shaders/particle.vert?raw'
@@ -38,12 +39,16 @@ function createParticleGeometry(size: number): BufferGeometry {
   return geometry
 }
 
-function createParticleUniforms(palette: CosinePalette) {
+function createParticleUniforms(palette: CosinePalette, size: number) {
+  // Additive blending sums every sprite, so denser grids draw each particle dimmer
+  // and slightly smaller to keep the cloud's overall exposure close to the reference.
+  const ratio = REFERENCE_COUNT / (size * size)
   return {
+    uDensityGain: { value: Math.min(ratio ** 0.6, 1.4) },
     uPositions: { value: null as Texture | null },
     uVelocities: { value: null as Texture | null },
     uResolution: { value: new Vector2(1, 1) },
-    uParticleSize: { value: PARTICLE_SIZE },
+    uParticleSize: { value: PARTICLE_SIZE * Math.min(ratio ** 0.2, 1.1) },
     uPaletteA: { value: new Vector3(...palette.a) },
     uPaletteB: { value: new Vector3(...palette.b) },
     uPaletteC: { value: new Vector3(...palette.c) },
@@ -51,15 +56,15 @@ function createParticleUniforms(palette: CosinePalette) {
   }
 }
 
-export function ParticleField() {
+export function ParticleField({ size }: { size: number }) {
   const gl = useThree((state) => state.gl)
   const engineRef = useRef<SimulationEngine | null>(null)
   const frameTime = useRef(1 / 60)
   const director = useMemo(() => new ForceDirector(), [])
-  const morph = useMemo(() => new ShapeMorph(SIMULATION_SIZE), [])
+  const morph = useMemo(() => new ShapeMorph(size), [size])
 
   const { geometry, material, uniforms } = useMemo(() => {
-    const uniforms = createParticleUniforms(PALETTES[useSimulationStore.getState().palette])
+    const uniforms = createParticleUniforms(PALETTES[useSimulationStore.getState().palette], size)
     const material = new ShaderMaterial({
       vertexShader: particleVertex,
       fragmentShader: particleFragment,
@@ -69,17 +74,17 @@ export function ParticleField() {
       depthTest: false,
       depthWrite: false,
     })
-    return { geometry: createParticleGeometry(SIMULATION_SIZE), material, uniforms }
-  }, [])
+    return { geometry: createParticleGeometry(size), material, uniforms }
+  }, [size])
 
   useEffect(() => {
-    const engine = new SimulationEngine(gl)
+    const engine = new SimulationEngine(gl, size)
     engineRef.current = engine
     return () => {
       engineRef.current = null
       engine.dispose()
     }
-  }, [gl])
+  }, [gl, size])
 
   useEffect(() => director.pointer.attach(gl.domElement), [director, gl])
 
