@@ -17,7 +17,7 @@ const float TAU = 6.283185307179586;
 const float MIN_POINT_SIZE = 2.0;
 const float STRETCH_GAIN = 0.55;
 const float MAX_STRETCH = 4.0;
-const float MAX_BOKEH_GROWTH = 3.0;
+const float MAX_BOKEH_GROWTH = 1.6;
 
 void main() {
   // The position attribute is repurposed: xy addresses this particle's texel in the

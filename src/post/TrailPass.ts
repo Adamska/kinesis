@@ -11,7 +11,7 @@ import fullscreenVertex from '../shaders/fullscreen.vert?raw'
 import trailFragment from '../shaders/trail.frag?raw'
 
 // Time for an afterglow to fade to 1/e of its brightness.
-const AFTERGLOW_SECONDS = 0.07
+const AFTERGLOW_SECONDS = 0.04
 
 const createHistory = () => new WebGLRenderTarget(1, 1, { type: HalfFloatType, depthBuffer: false })
 
