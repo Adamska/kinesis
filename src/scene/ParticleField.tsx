@@ -23,7 +23,7 @@ const FRAME_TIME_SMOOTHING = 0.05
 // Loud passages from the microphone stir the field harder.
 const AUDIO_TURBULENCE_GAIN = 1.6
 // Blur radius per world unit of distance from the focal plane.
-const APERTURE = 0.024
+const APERTURE = 0.012
 const FOCUS_RATE = 3
 
 const scratch = new Vector3()
