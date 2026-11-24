@@ -8,6 +8,7 @@ const FOLLOW_RATE = 14
 const VELOCITY_RATE = 10
 const PINCH_RATE = 9
 const AXIS_RATE = 6
+const PRESENCE_RATE = 8
 const SHOCKWAVE_DECAY = 3.2
 const SHOCKWAVE_FLOOR = 0.004
 const MAX_HAND_SPEED = 7
@@ -81,6 +82,8 @@ export class ForceDirector {
     let impulse = 0
     points.forEach((point, index) => {
       this.resolve(point, index, dt, VELOCITY_GAIN[source])
+      const steered = source !== 'autonomous' && this.inputs[index].active ? 1 : 0
+      point.presence += (steered - point.presence) * (1 - Math.exp(-dt * PRESENCE_RATE))
       pinch = Math.max(pinch, point.pinch)
       impulse = Math.max(impulse, point.impulse)
     })

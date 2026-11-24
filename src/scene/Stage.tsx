@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { AdaptiveResolution, MAX_PIXEL_RATIO } from './AdaptiveResolution'
 import { CameraRig } from './CameraRig'
+import { ForceReticles } from './ForceReticles'
 import { ParticleField } from './ParticleField'
 import { PostProcessingStack } from './PostProcessingStack'
 
@@ -17,6 +18,7 @@ export function Stage() {
       <color attach="background" args={[VOID_COLOR]} />
       <CameraRig />
       <ParticleField />
+      <ForceReticles />
       <PostProcessingStack />
       <AdaptiveResolution />
     </Canvas>

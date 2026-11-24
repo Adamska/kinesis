@@ -14,6 +14,8 @@ export interface ForcePoint {
   pinch: number
   /** Shockwave impulse decaying from 1 to 0; 1 - impulse is the blast's age. */
   impulse: number
+  /** How visibly a user is steering this point, from 0 to 1. Drives the reticle only. */
+  presence: number
 }
 
 export interface ForceField {
@@ -28,5 +30,6 @@ export function createForcePoint(index: number): ForcePoint {
     axis: DEFAULT_ORBIT_AXIS.clone().multiplyScalar(index % 2 === 0 ? 1 : -1),
     pinch: 0,
     impulse: 0,
+    presence: 0,
   }
 }
