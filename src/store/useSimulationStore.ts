@@ -10,7 +10,7 @@ import type { TrackerStage } from '../vision/HandTracker'
 import { readUrlSettings } from './urlSettings'
 
 export type InputSource = 'autonomous' | 'pointer' | 'tracking'
-export type Gesture = 'flow' | 'pinch' | 'shockwave'
+export type Gesture = 'flow' | 'pinch' | 'shockwave' | 'sculpt' | 'overload'
 export type VisionStatus = 'idle' | 'loading' | 'active' | 'denied' | 'unavailable'
 export type MicStatus = 'off' | 'starting' | 'on' | 'denied'
 
@@ -28,11 +28,24 @@ export interface TrackedHand {
   /** Apparent hand size mapped to [-1, 1]; positive means closer to the camera. */
   depth: number
   pinch: number
+  /** True from an open hand held still until a fist: particles gather into its shape. */
+  sculpting: boolean
+  /** Progress of a fist held while sculpting toward its explosion, from 0 to 1. */
+  charge: number
+  /** Set when a charged fist explodes; consumed by the force director. */
+  explodePending: boolean
+  /** True for a hand that appears as a left hand on screen (the view is mirrored). */
+  left: boolean
   burstPending: boolean
   /** Palm normal in view space (x right, y up, z toward the viewer), mirrored like x. */
   palmNormal: Vector3
   /** Interleaved xyz of the 21 landmarks: x and y in [0, 1] image space, z relative depth. */
   landmarks: Float32Array
+  /**
+   * Interleaved xyz of the 21 landmarks in metres around the hand's center (x right,
+   * y down, z away from the camera); all zero when unavailable.
+   */
+  world: Float32Array
   /** Width over height of the camera frame the landmarks refer to. */
   aspect: number
 }
@@ -61,6 +74,7 @@ export interface SimulationBridge extends ForceField {
  */
 export const simulationBridge: SimulationBridge = {
   points: Array.from({ length: FORCE_POINT_COUNT }, (_, index) => createForcePoint(index)),
+  handSurface: null,
   burstRequested: false,
   audioLevel: 0,
   hands: Array.from({ length: MAX_HANDS }, () => ({
@@ -73,9 +87,14 @@ export const simulationBridge: SimulationBridge = {
     path: new HandPath(),
     depth: 0,
     pinch: 0,
+    sculpting: false,
+    charge: 0,
+    explodePending: false,
+    left: false,
     burstPending: false,
     palmNormal: new Vector3(0, 0, 1),
     landmarks: new Float32Array(LANDMARK_COUNT * LANDMARK_STRIDE),
+    world: new Float32Array(LANDMARK_COUNT * LANDMARK_STRIDE),
     aspect: 4 / 3,
   })),
   telemetry: { fps: 0, inferenceMs: 0, downloadedBytes: 0, source: 'autonomous', gesture: 'flow' },

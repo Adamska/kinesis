@@ -7,14 +7,18 @@ import {
   ShaderMaterial,
   Vector2,
   Vector3,
+  Vector4,
   type Texture,
 } from 'three'
 import { PALETTES, type CosinePalette } from '../config/palettes'
 import { REFERENCE_COUNT } from '../config/density'
+import { FORCE_POINT_COUNT } from '../gpgpu/forceField'
 import { SimulationEngine } from '../gpgpu/SimulationEngine'
+import { bindForceCharge, bindForceDrive, FORCE_DEFINES } from '../gpgpu/simulationUniforms'
 import { ForceDirector } from '../input/ForceDirector'
 import particleFragment from '../shaders/particle.frag?raw'
 import particleVertex from '../shaders/particle.vert?raw'
+import sculpt from '../shaders/sculpt.glsl?raw'
 import { simulationBridge, useSimulationStore } from '../store/useSimulationStore'
 
 const PARTICLE_SIZE = 0.022
@@ -53,6 +57,10 @@ function createParticleUniforms(palette: CosinePalette, size: number) {
     uParticleSize: { value: PARTICLE_SIZE * Math.min(ratio ** 0.2, 1.1) },
     uFocusDistance: { value: 5 },
     uAperture: { value: APERTURE },
+    uStateSize: { value: size },
+    uForceDrive: { value: Array.from({ length: FORCE_POINT_COUNT }, () => new Vector4()) },
+    uForcePosition: { value: Array.from({ length: FORCE_POINT_COUNT }, () => new Vector3()) },
+    uForceCharge: { value: Array.from({ length: FORCE_POINT_COUNT }, () => new Vector3()) },
     uPaletteA: { value: new Vector3(...palette.a) },
     uPaletteB: { value: new Vector3(...palette.b) },
     uPaletteC: { value: new Vector3(...palette.c) },
@@ -69,9 +77,10 @@ export function ParticleField({ size }: { size: number }) {
   const { geometry, material, uniforms } = useMemo(() => {
     const uniforms = createParticleUniforms(PALETTES[useSimulationStore.getState().palette], size)
     const material = new ShaderMaterial({
-      vertexShader: particleVertex,
+      vertexShader: `${sculpt}\n${particleVertex}`,
       fragmentShader: particleFragment,
       uniforms,
+      defines: FORCE_DEFINES,
       blending: AdditiveBlending,
       transparent: true,
       depthTest: false,
@@ -112,6 +121,9 @@ export function ParticleField({ size }: { size: number }) {
 
     uniforms.uPositions.value = engine.positionTexture
     uniforms.uVelocities.value = engine.velocityTexture
+    bindForceDrive(uniforms.uForceDrive.value, simulationBridge)
+    bindForceCharge(uniforms.uForceCharge.value, simulationBridge)
+    simulationBridge.points.forEach((point, index) => uniforms.uForcePosition.value[index].copy(point.position))
     state.gl.getDrawingBufferSize(uniforms.uResolution.value)
 
     // Focus rests on the center of the cloud and racks to the force point a user steers.

@@ -8,12 +8,16 @@ const POINTER_LABELS: Record<Gesture, string> = {
   flow: 'Pointer: Stir',
   pinch: 'Pointer: Pinch',
   shockwave: 'Pointer: Shockwave',
+  sculpt: 'Pointer: Stir',
+  overload: 'Pointer: Stir',
 }
 
 const TRACKING_LABELS: Record<Gesture, string> = {
   flow: 'Tracking: Open hand',
   pinch: 'Tracking: Pinch',
   shockwave: 'Tracking: Shockwave',
+  sculpt: 'Tracking: Hand form',
+  overload: 'Tracking: Overload',
 }
 
 function describeState(): { label: string; gesture: Gesture } {
@@ -42,10 +46,10 @@ export function GestureIndicator() {
 
   return (
     <div ref={rootRef} data-gesture="flow" className="group flex min-w-52 items-center gap-2.5">
-      <span className="size-1.5 bg-white/45 transition-colors duration-150 group-data-[gesture=pinch]:bg-signal group-data-[gesture=shockwave]:bg-white" />
+      <span className="size-1.5 bg-white/45 transition-colors duration-150 group-data-[gesture=pinch]:bg-signal group-data-[gesture=sculpt]:bg-signal group-data-[gesture=overload]:bg-white group-data-[gesture=shockwave]:bg-white" />
       <span
         ref={labelRef}
-        className="text-white/70 transition-colors duration-150 group-data-[gesture=pinch]:text-signal group-data-[gesture=shockwave]:text-white"
+        className="text-white/70 transition-colors duration-150 group-data-[gesture=pinch]:text-signal group-data-[gesture=sculpt]:text-signal group-data-[gesture=overload]:text-white group-data-[gesture=shockwave]:text-white"
       >
         Autonomous flow
       </span>

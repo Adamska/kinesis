@@ -12,6 +12,8 @@ const TRACKING_GUIDE = [
   ['Move hand', 'Drag the fluid'],
   ['Pinch', 'Singularity'],
   ['Release pinch', 'Shockwave'],
+  ['Hold open hand', 'Hand of light'],
+  ['Hold a fist 2 s', 'Overload'],
   ['Tilt palm', 'Spin axis'],
   ['Two hands', 'Twin vortices'],
   ['Keyboard', 'Press ?'],

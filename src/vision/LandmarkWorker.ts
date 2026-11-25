@@ -1,7 +1,12 @@
 import { simulationBridge } from '../store/useSimulationStore'
 import type { LoadStage, WorkerRequest, WorkerResponse } from './landmarkProtocol'
 
-export type ResultListener = (hands: Float32Array[], inferenceMs: number) => void
+export type ResultListener = (
+  hands: Float32Array[],
+  world: Float32Array[],
+  left: boolean[],
+  inferenceMs: number,
+) => void
 
 /**
  * Main-thread handle on the landmark worker. Loading is decoupled from the camera, so
@@ -31,7 +36,7 @@ export class LandmarkWorker {
         } else if (data.type === 'progress') simulationBridge.telemetry.downloadedBytes = data.bytes
         else if (data.type === 'ready') resolve()
         else if (data.type === 'error') reject(new Error(data.message))
-        else this.resultListener?.(data.hands, data.inferenceMs)
+        else this.resultListener?.(data.hands, data.world, data.left, data.inferenceMs)
       }
     })
     // Rejections are delivered to whoever awaits `ready`; an unobserved preload

@@ -81,23 +81,39 @@ async function initialize(): Promise<void> {
 function detect(bitmap: ImageBitmap): void {
   const startedAt = performance.now()
   const hands: Float32Array[] = []
+  const world: Float32Array[] = []
+  const left: boolean[] = []
   try {
     const result = landmarker?.detectForVideo(bitmap, startedAt)
-    for (const hand of result?.landmarks ?? []) {
+    for (const [index, hand] of (result?.landmarks ?? []).entries()) {
       if (hand.length < LANDMARK_COUNT) continue
       const packed = new Float32Array(LANDMARK_COUNT * LANDMARK_STRIDE)
+      // World landmarks keep their true depth, which the image-space z flattens; the
+      // hand model takes its 3D orientation from them.
+      const metric = new Float32Array(LANDMARK_COUNT * LANDMARK_STRIDE)
+      const worldHand = result?.worldLandmarks[index]
       for (let index = 0; index < LANDMARK_COUNT; index++) {
         packed[index * LANDMARK_STRIDE] = hand[index].x
         packed[index * LANDMARK_STRIDE + 1] = hand[index].y
         packed[index * LANDMARK_STRIDE + 2] = hand[index].z
+        const point = worldHand?.[index]
+        if (!point) continue
+        metric[index * LANDMARK_STRIDE] = point.x
+        metric[index * LANDMARK_STRIDE + 1] = point.y
+        metric[index * LANDMARK_STRIDE + 2] = point.z
       }
       hands.push(packed)
+      world.push(metric)
+      left.push(result?.handedness[index]?.[0]?.categoryName === 'Left')
     }
   } finally {
     bitmap.close()
   }
   const inferenceMs = performance.now() - startedAt
-  scope.postMessage({ type: 'result', hands, inferenceMs }, hands.map((hand) => hand.buffer))
+  scope.postMessage(
+    { type: 'result', hands, world, left, inferenceMs },
+    [...hands, ...world].map((array) => array.buffer),
+  )
 }
 
 scope.addEventListener('message', ({ data }) => {

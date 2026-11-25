@@ -12,6 +12,7 @@ import {
 } from 'three'
 import curlNoise from '../shaders/curlNoise.glsl?raw'
 import positionFragment from '../shaders/position.frag?raw'
+import sculpt from '../shaders/sculpt.glsl?raw'
 import seedFragment from '../shaders/seed.frag?raw'
 import simulationVertex from '../shaders/simulation.vert?raw'
 import velocityFragment from '../shaders/velocity.frag?raw'
@@ -27,7 +28,7 @@ import {
 } from './simulationUniforms'
 import { createSeedState } from './seedState'
 
-const MAX_TIME_STEP = 1 / 30
+export const MAX_TIME_STEP = 1 / 30
 
 interface PingPong {
   read: WebGLRenderTarget
@@ -72,8 +73,8 @@ export class SimulationEngine {
 
     this.position = { read: createStateTarget(size), write: createStateTarget(size) }
     this.velocity = { read: createStateTarget(size), write: createStateTarget(size) }
-    this.positionPass = this.createPass(positionFragment, this.positionUniforms)
-    this.velocityPass = this.createPass(`${curlNoise}\n${velocityFragment}`, this.velocityUniforms)
+    this.positionPass = this.createPass(`${sculpt}\n${positionFragment}`, this.positionUniforms)
+    this.velocityPass = this.createPass(`${curlNoise}\n${sculpt}\n${velocityFragment}`, this.velocityUniforms)
 
     this.quad = new Mesh(this.geometry, this.velocityPass)
     this.quad.frustumCulled = false

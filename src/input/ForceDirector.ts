@@ -3,6 +3,7 @@ import { DEFAULT_ORBIT_AXIS, FORCE_POINT_COUNT, type ForcePoint } from '../gpgpu
 import { simulationBridge, useSimulationStore, type InputSource } from '../store/useSimulationStore'
 import { AutonomousFlow } from './AutonomousFlow'
 import { projectToFocalPlane } from './focalPlane'
+import { HandSculptor } from './HandSculptor'
 import { PointerField } from './PointerField'
 import { PROFILES, type SourceProfile } from './sourceProfiles'
 
@@ -22,12 +23,28 @@ const HAND_HOLD_MS = 2500
 const ATTRACT_DELAY_MS = 30_000
 const HAND_DEPTH_RANGE = 0.5
 const HAND_REACH = 2.2
+// Seconds for particles to gather into a still, open hand, and to let go of it.
+const SCULPT_GATHER_S = 1.8
+const SCULPT_RELEASE_S = 1
+// A charging fist opens a gravity well this strong, so the fluid around it is drawn
+// into a tightening vortex, and beats faster as the charge builds.
+const CHARGE_PULL = 0.5
+const CHARGE_RISE_RATE = 14
+const CHARGE_FALL_RATE = 5
+const PULSE_FROM_HZ = 1.5
+const PULSE_TO_HZ = 8
 
 interface ForceInput {
   active: boolean
   target: Vector3
   pinch: number
   burst: boolean
+  /** 1 while the hand behind this input holds the sculpt pose. */
+  sculpt: number
+  /** Overload of the sculpting hand's fist, from 0 to 1. */
+  charge: number
+  /** True on the frame a charged fist explodes. */
+  explode: boolean
   /** Spin axis requested by the input, or null to fall back to the default. */
   axis: Vector3 | null
 }
@@ -47,8 +64,13 @@ export class ForceDirector {
     target: new Vector3(),
     pinch: 0,
     burst: false,
+    sculpt: 0,
+    charge: 0,
+    explode: false,
     axis: null,
   }))
+  private readonly beats: number[] = Array.from({ length: FORCE_POINT_COUNT }, () => 0)
+  private readonly sculptor = new HandSculptor()
   private readonly axes = Array.from({ length: FORCE_POINT_COUNT }, () => new Vector3())
   private readonly wasActive: boolean[] = Array.from({ length: FORCE_POINT_COUNT }, () => false)
   private source: InputSource = 'autonomous'
@@ -67,9 +89,14 @@ export class ForceDirector {
     for (const input of this.inputs) {
       input.active = false
       input.burst = false
+      input.sculpt = 0
+      input.charge = 0
+      input.explode = false
       input.axis = null
     }
 
+    // The hand model is only needed once a webcam session starts.
+    if (tracking) this.sculptor.prepare((surface) => (simulationBridge.handSurface = surface))
     const source = this.gather(now, camera, tracking)
     if (source !== 'autonomous') this.lastUserAt = now
     // A new source starts where it is, instead of dragging its points across the cloud.
@@ -84,8 +111,13 @@ export class ForceDirector {
     const profile = PROFILES[source]
     let pinch = 0
     let impulse = 0
+    let sculpt = 0
+    let charge = 0
     points.forEach((point, index) => {
       this.resolve(point, index, dt, profile)
+      this.sculpt(point, index, dt, source, camera)
+      sculpt = Math.max(sculpt, point.sculpt)
+      charge = Math.max(charge, point.charge)
       const steered = source !== 'autonomous' && this.inputs[index].active ? 1 : 0
       point.presence += (steered - point.presence) * (1 - Math.exp(-dt * PRESENCE_RATE))
       point.carry += (profile.carry - point.carry) * (1 - Math.exp(-dt * CARRY_RATE))
@@ -94,7 +126,41 @@ export class ForceDirector {
     })
 
     telemetry.source = source
-    telemetry.gesture = impulse > 0.3 ? 'shockwave' : pinch > 0.5 ? 'pinch' : 'flow'
+    telemetry.gesture =
+      impulse > 0.3
+        ? 'shockwave'
+        : charge > 0.05
+          ? 'overload'
+          : pinch > 0.5
+            ? 'pinch'
+            : sculpt > 0.3
+              ? 'sculpt'
+              : 'flow'
+  }
+
+  /**
+   * Ramps the point's sculpt progress toward its hand's pose and keeps the hand's
+   * surface in step with the point. A hand that leaves keeps its last surface while
+   * its particles let go, and snaps to its new pose the next time it sculpts. An
+   * exploding fist lets go of every particle at once, so the blast throws them all.
+   */
+  private sculpt(point: ForcePoint, index: number, dt: number, source: InputSource, camera: Camera): void {
+    const input = this.inputs[index]
+    const holding = input.sculpt > 0
+    const rate = holding ? 1 / SCULPT_GATHER_S : -1 / SCULPT_RELEASE_S
+    point.sculpt = input.explode ? 0 : MathUtils.clamp(point.sculpt + rate * dt, 0, 1)
+
+    const chargeRate = input.charge > point.charge ? CHARGE_RISE_RATE : CHARGE_FALL_RATE
+    point.charge += (input.charge - point.charge) * (1 - Math.exp(-dt * chargeRate))
+    if (input.explode || point.charge < 1e-3) point.charge = 0
+    const hz = MathUtils.lerp(PULSE_FROM_HZ, PULSE_TO_HZ, point.charge * point.charge)
+    this.beats[index] = point.charge > 0 ? (this.beats[index] + dt * hz) % 1 : 0
+    point.pulse = point.charge > 0 ? 0.5 - 0.5 * Math.cos(2 * Math.PI * this.beats[index]) : 0
+
+    const live = source === 'tracking' && input.active
+    if (live && (holding || point.sculpt > 0)) {
+      this.sculptor.update(index, simulationBridge.hands[index], point.position, camera, dt)
+    } else if (point.sculpt === 0) this.sculptor.reset(index)
   }
 
   /** Fills the per-point inputs from the highest-priority live source. */
@@ -122,9 +188,14 @@ export class ForceDirector {
           input.target,
         )
         input.active = true
-        input.pinch = hand.pinch
         input.burst = hand.burstPending
+        input.sculpt = hand.sculpting && this.sculptor.ready ? 1 : 0
+        input.charge = input.sculpt * hand.charge
+        input.pinch = Math.max(hand.pinch, input.charge * CHARGE_PULL)
+        input.explode = hand.explodePending && this.sculptor.ready
+        input.burst ||= input.explode
         hand.burstPending = false
+        hand.explodePending = false
         // The palm normal is measured in view space; the camera's rotation carries it
         // into the world, so tilting the hand tilts the singularity's disc.
         input.axis = this.axes[index].copy(hand.palmNormal).applyQuaternion(camera.quaternion)
@@ -172,8 +243,14 @@ export class ForceDirector {
     point.pinch += (pinchTarget - point.pinch) * (1 - Math.exp(-dt * PINCH_RATE))
 
     point.impulse *= Math.exp(-dt * SHOCKWAVE_DECAY)
-    if (input.burst) point.impulse = 1
-    if (point.impulse < SHOCKWAVE_FLOOR) point.impulse = 0
+    if (input.burst) {
+      point.impulse = 1
+      point.blast = input.explode ? 1 : 0
+    }
+    if (point.impulse < SHOCKWAVE_FLOOR) {
+      point.impulse = 0
+      point.blast = 0
+    }
 
     const spin = index % 2 === 0 ? 1 : -1
     const axisTarget = input.axis ?? fallbackAxis.copy(DEFAULT_ORBIT_AXIS).multiplyScalar(spin)

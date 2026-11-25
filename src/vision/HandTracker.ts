@@ -73,7 +73,7 @@ export class HandTracker {
     this.video.srcObject = this.stream
     await this.video.play()
     this.worker.attach(
-      (hands, inferenceMs) => this.receive(hands, inferenceMs),
+      (hands, world, left, inferenceMs) => this.receive(hands, world, left, inferenceMs),
       (error) => this.events.onFailure(error),
     )
     this.startSampling()
@@ -142,7 +142,7 @@ export class HandTracker {
     )
   }
 
-  private receive(hands: Float32Array[], inferenceMs: number): void {
+  private receive(hands: Float32Array[], world: Float32Array[], left: boolean[], inferenceMs: number): void {
     this.awaitingResult = false
     if (this.disposed) return
     const telemetry = simulationBridge.telemetry
@@ -150,7 +150,8 @@ export class HandTracker {
     const aspect = this.video.videoWidth / this.video.videoHeight || DEFAULT_ASPECT
     const now = performance.now()
     assignHandSlots(hands, simulationBridge.hands).forEach((landmarks, slot) => {
-      this.gestures[slot].update(landmarks, aspect, now)
+      const index = landmarks ? hands.indexOf(landmarks) : -1
+      this.gestures[slot].update(landmarks, world[index] ?? null, left[index] ?? false, aspect, now)
     })
     // A frame that was decoded while the worker was busy is sent right away.
     this.capture()

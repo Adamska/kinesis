@@ -1,4 +1,5 @@
 import { Vector3 } from 'three'
+import type { HandSurface } from './handShape'
 
 /** Number of simultaneous force points the shaders evaluate: two hands or two fingers. */
 export const FORCE_POINT_COUNT = 2
@@ -21,10 +22,23 @@ export interface ForcePoint {
    * velocity, 1 carries it along at the point's own speed.
    */
   carry: number
+  /**
+   * How far particles have gathered into the shape of the hand steering this point,
+   * from 0 to 1. Rises once an open hand is held still and falls when it lets go.
+   */
+  sculpt: number
+  /** Overload of a sculpted hand closed into a fist, from 0 to 1 at its explosion. */
+  charge: number
+  /** Heartbeat of the overload, from 0 to 1, quickening as the charge rises. */
+  pulse: number
+  /** 1 while the running shockwave is a charged fist exploding, 0 otherwise. */
+  blast: number
 }
 
 export interface ForceField {
   points: readonly ForcePoint[]
+  /** Posed surface of each tracked hand, read while its point sculpts; null until loaded. */
+  handSurface: HandSurface | null
 }
 
 export function createForcePoint(index: number): ForcePoint {
@@ -37,5 +51,9 @@ export function createForcePoint(index: number): ForcePoint {
     impulse: 0,
     presence: 0,
     carry: 0,
+    sculpt: 0,
+    charge: 0,
+    pulse: 0,
+    blast: 0,
   }
 }

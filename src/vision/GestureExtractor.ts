@@ -28,6 +28,27 @@ const ARMING_MAX_SPEED = 2.5
 const BURST_WINDOW_MS = 400
 const BURST_COOLDOWN_MS = 650
 const NORMAL_RATE = 10
+
+// Sculpt: every finger out, the thumb spread away from the index, held still. It
+// engages only from a clearly open, steady hand; from then on the hand can move and
+// relax freely. Closing it into a fist charges an overload that explodes after
+// OVERLOAD_MS; opening it again before then cancels the charge and keeps the hand.
+// Closed and open have separate thresholds, and a reopening must last REOPEN_MS, so
+// a frame folded by motion blur neither starts nor cancels a charge on its own.
+const OPEN_SPREAD_FROM = 1.42
+const OPEN_SPREAD_TO = 1.58
+const THUMB_OUT_FROM = 0.45
+const THUMB_OUT_TO = 0.65
+const SCULPT_ENGAGE_POSE = 0.8
+const SCULPT_ENGAGE_SPEED = 0.35
+const SCULPT_HOLD_MS = 450
+const FIST_SPREAD = 1.3
+const REOPEN_SPREAD = 1.45
+const OVERLOAD_MS = 2000
+const REOPEN_MS = 150
+// MediaPipe's handedness flickers on ambiguous frames; a hand only changes sides
+// after this many consecutive frames agree.
+const HANDEDNESS_FRAMES = 6
 const VELOCITY_RATE = 25
 
 const wristToIndex = new Vector3()
@@ -44,12 +65,16 @@ export class GestureExtractor {
   private pinchedSince = Number.NEGATIVE_INFINITY
   private armedUntil = Number.NEGATIVE_INFINITY
   private burstAt = Number.NEGATIVE_INFINITY
+  private stillSince = Number.NEGATIVE_INFINITY
+  private fistSince = Number.NEGATIVE_INFINITY
+  private reopenSince = Number.NEGATIVE_INFINITY
+  private handednessVotes = 0
 
   constructor(hand: TrackedHand) {
     this.hand = hand
   }
 
-  update(landmarks: Float32Array | null, aspect: number, now: number): void {
+  update(landmarks: Float32Array | null, world: Float32Array | null, left: boolean, aspect: number, now: number): void {
     const hand = this.hand
     if (!landmarks) {
       // Motion blur drops detection for a frame or two during fast moves. Holding the
@@ -81,6 +106,11 @@ export class GestureExtractor {
         span(Landmark.WRIST, Landmark.PINKY_TIP)) /
       (4 * palm)
     const openness = MathUtils.smoothstep(spread, SPREAD_FIST, SPREAD_OPEN)
+    const thumbOut = span(Landmark.THUMB_TIP, Landmark.INDEX_MCP) / palm
+    const openPose =
+      MathUtils.smoothstep(spread, OPEN_SPREAD_FROM, OPEN_SPREAD_TO) *
+      MathUtils.smoothstep(thumbOut, THUMB_OUT_FROM, THUMB_OUT_TO) *
+      (1 - pinch)
 
     // Mirror x so the cloud follows the hand like a reflection, and amplify reach so the
     // edges of the volume are comfortable to hit without leaving the camera frame.
@@ -108,10 +138,15 @@ export class GestureExtractor {
     // weak gravity well the user never asked for.
     const strength = MathUtils.smoothstep(pinch, PINCH_DEAD_ZONE, PINCH_FULL)
     hand.pinch = dt > 0 ? MathUtils.lerp(hand.pinch, strength, 1 - Math.exp(-dt * PINCH_RATE)) : strength
-    this.detectRelease(pinch, openness, dt > 0 ? Math.hypot(hand.vx, hand.vy) : 0, dt === 0, now)
+    const speed = dt > 0 ? Math.hypot(hand.vx, hand.vy) : 0
+    this.detectRelease(pinch, openness, speed, dt === 0, now)
+    this.detectSculpt(openPose, spread, speed, dt === 0, now)
 
+    this.updateHandedness(left, dt === 0)
     this.updatePalmNormal(at, aspect, dt)
     hand.landmarks.set(landmarks)
+    if (world) hand.world.set(world)
+    else hand.world.fill(0)
     hand.aspect = aspect
     hand.visible = true
     hand.seenAt = now
@@ -140,6 +175,61 @@ export class GestureExtractor {
   }
 
   /**
+   * MediaPipe labels handedness assuming a mirrored, selfie-style image. The frames it
+   * sees are not mirrored but the view is, so its label names the hand as it appears
+   * on screen, which is the chirality the hand model must take.
+   */
+  private updateHandedness(left: boolean, reacquired: boolean): void {
+    const hand = this.hand
+    // The label is most reliable on an open palm facing the camera, which is how a
+    // sculpt starts. Turned edge-on or to its back it can flip, and a flipped model
+    // would show the palm where the back should be, so it is locked while sculpting.
+    if (hand.sculpting && !reacquired) {
+      this.handednessVotes = 0
+      return
+    }
+    if (reacquired || left === hand.left) {
+      if (reacquired) hand.left = left
+      this.handednessVotes = 0
+      return
+    }
+    if (++this.handednessVotes >= HANDEDNESS_FRAMES) {
+      hand.left = left
+      this.handednessVotes = 0
+    }
+  }
+
+  /**
+   * Engages once an open hand has stayed still briefly. While engaged, a fist charges
+   * an overload and a fist held for OVERLOAD_MS explodes, ending the sculpt.
+   */
+  private detectSculpt(openPose: number, spread: number, speed: number, reacquired: boolean, now: number): void {
+    const hand = this.hand
+    if (hand.sculpting) {
+      if (spread < FIST_SPREAD) {
+        this.reopenSince = Number.NEGATIVE_INFINITY
+        if (!Number.isFinite(this.fistSince)) this.fistSince = now
+      } else if (spread > REOPEN_SPREAD && Number.isFinite(this.fistSince)) {
+        if (!Number.isFinite(this.reopenSince)) this.reopenSince = now
+        if (now - this.reopenSince >= REOPEN_MS) this.endCharge()
+      }
+      hand.charge = Number.isFinite(this.fistSince) ? Math.min((now - this.fistSince) / OVERLOAD_MS, 1) : 0
+      if (hand.charge < 1) return
+      hand.explodePending = true
+      hand.sculpting = false
+      this.endCharge()
+      this.stillSince = Number.NEGATIVE_INFINITY
+      return
+    }
+    if (reacquired || openPose < SCULPT_ENGAGE_POSE || speed > SCULPT_ENGAGE_SPEED) {
+      this.stillSince = Number.NEGATIVE_INFINITY
+      return
+    }
+    if (!Number.isFinite(this.stillSince)) this.stillSince = now
+    hand.sculpting = now - this.stillSince >= SCULPT_HOLD_MS
+  }
+
+  /**
    * Palm normal from the wrist and the index and pinky knuckles. Image x and the
    * relative depth z are both normalized by frame width, y by frame height; scaling x
    * and z by the aspect ratio makes the axes isotropic. Negating all three converts
@@ -163,8 +253,18 @@ export class GestureExtractor {
     palm.normalize()
   }
 
+  private endCharge(): void {
+    this.hand.charge = 0
+    this.fistSince = Number.NEGATIVE_INFINITY
+    this.reopenSince = Number.NEGATIVE_INFINITY
+  }
+
   release(): void {
     this.hand.visible = false
+    // A hand that leaves lets its particles go quietly; only a held fist explodes.
+    this.hand.sculpting = false
+    this.stillSince = Number.NEGATIVE_INFINITY
+    this.endCharge()
     this.hand.path.reset()
     this.x.reset()
     this.y.reset()

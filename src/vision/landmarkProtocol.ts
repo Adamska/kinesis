@@ -7,5 +7,9 @@ export type WorkerResponse =
   | { type: 'progress'; bytes: number }
   | { type: 'ready' }
   | { type: 'error'; message: string }
-  /** One array per detected hand: interleaved xyz of the 21 landmarks in image space. */
-  | { type: 'result'; hands: Float32Array[]; inferenceMs: number }
+  /**
+   * One array per detected hand: interleaved xyz of the 21 landmarks in image space,
+   * the same landmarks in metric 3D around the hand's center, and whether MediaPipe
+   * classifies it as a left hand.
+   */
+  | { type: 'result'; hands: Float32Array[]; world: Float32Array[]; left: boolean[]; inferenceMs: number }

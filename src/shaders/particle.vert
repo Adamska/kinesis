@@ -5,6 +5,12 @@ uniform float uParticleSize;
 uniform float uDensityGain;
 uniform float uFocusDistance;
 uniform float uAperture;
+uniform float uStateSize;
+// Only w, the sculpt progress, is read here (see sculpt.glsl).
+uniform vec4 uForceDrive[FORCE_COUNT];
+uniform vec3 uForcePosition[FORCE_COUNT];
+// Only x, the overload charge, is read here.
+uniform vec3 uForceCharge[FORCE_COUNT];
 
 varying vec2 vAxis;
 varying float vStretch;
@@ -18,6 +24,12 @@ const float MIN_POINT_SIZE = 2.0;
 const float STRETCH_GAIN = 0.55;
 const float MAX_STRETCH = 4.0;
 const float MAX_BOKEH_GROWTH = 1.6;
+// Depth shading of a sculpted hand, in world units in front of (positive) or behind
+// its palm center: the near skin is drawn at full strength and the far skin fades,
+// so the palm, the back and the edge of the hand read apart as it turns.
+const float SHADE_NEAR = 0.12;
+const float SHADE_FAR = -0.22;
+const float SHADE_FLOOR = 0.3;
 
 void main() {
   // The position attribute is repurposed: xy addresses this particle's texel in the
@@ -58,4 +70,13 @@ void main() {
   // spreads them over a streak. Scaling opacity by the area ratios keeps emitted light
   // constant.
   vOpacity = (diameter * diameter) / (size * size) / vStretch * uDensityGain;
+
+  // Particles settled on a sculpted hand are packed densely; dim them to match.
+  float hold;
+  int hand = sculptHand(floor(position.xy * uStateSize), uForceDrive, hold);
+  if (hand >= 0) {
+    float relief = viewPosition.z - (modelViewMatrix * vec4(uForcePosition[hand], 1.0)).z;
+    float shade = mix(SHADE_FLOOR, 1.0, smoothstep(SHADE_FAR, SHADE_NEAR, relief));
+    vOpacity *= mix(1.0, mix(SCULPT_DIM, CHARGE_DIM, uForceCharge[hand].x) * shade, hold);
+  }
 }
