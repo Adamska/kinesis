@@ -28,7 +28,7 @@ const SCULPT_GATHER_S = 1.8
 const SCULPT_RELEASE_S = 1
 // A charging fist opens a gravity well this strong, so the fluid around it is drawn
 // into a tightening vortex, and beats faster as the charge builds.
-const CHARGE_PULL = 0.5
+const CHARGE_PULL = 0.3
 const CHARGE_RISE_RATE = 14
 const CHARGE_FALL_RATE = 5
 const PULSE_FROM_HZ = 1.5

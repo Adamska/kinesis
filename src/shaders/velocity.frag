@@ -37,8 +37,11 @@ const float SHOCK_REACH = 2.2;
 const float SHOCK_WIDTH = 0.55;
 const float SHOCK_GAIN = 14.0;
 // An exploding fist throws matter harder and farther than a released pinch.
-const float BLAST_GAIN = 2.6;
-const float BLAST_REACH = 1.6;
+const float BLAST_GAIN = 1.5;
+const float BLAST_REACH = 1.25;
+// While a fist explodes, speed is capped lower: most of the cloud sits in the fist and
+// takes the full kick at once, and uncapped it would fly out past the camera.
+const float BLAST_MAX_SPEED = 2.0;
 
 const float DRAG_RADIUS = 0.75;
 const float DRAG_GAIN = 1.6;
@@ -135,6 +138,7 @@ void main() {
   velocity += (flow - velocity) * coupling;
 
   vec3 acceleration = vec3(0.0);
+  float speedLimit = MAX_SPEED;
 
   // Harmonic confinement acts only past the rest radius, leaving the interior flow
   // incompressible while pulling escapees back with a spring force.
@@ -166,6 +170,7 @@ void main() {
     // kicks whatever it sweeps over radially outward.
     float impulse = uForceDrive[i].y;
     float blast = uForceCharge[i].z;
+    speedLimit = min(speedLimit, mix(MAX_SPEED, BLAST_MAX_SPEED, blast));
     float front = (1.0 - impulse) * SHOCK_REACH * mix(1.0, BLAST_REACH, blast);
     float shell = exp(-pow((dist - front) / (SHOCK_WIDTH * mix(1.0, BLAST_REACH, blast)), 2.0));
     acceleration += radial * impulse * SHOCK_GAIN * mix(1.0, BLAST_GAIN, blast) * shell;
@@ -220,7 +225,7 @@ void main() {
   }
 
   velocity += acceleration * uDelta;
-  velocity *= min(1.0, MAX_SPEED / max(length(velocity), 1e-4));
+  velocity *= min(1.0, speedLimit / max(length(velocity), 1e-4));
 
   phase = fract(phase + uDelta * (0.08 + 0.06 * flowMagnitude));
 

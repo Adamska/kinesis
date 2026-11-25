@@ -13,10 +13,11 @@ const float SCULPT_DIM = 0.2;
 // Overload of a fist about to explode (charge in [0, 1], see ForceDirector): the fist
 // squeezes in, trembles, heats up and throbs with a quickening heartbeat.
 const float CHARGE_SQUEEZE = 0.14;
-const float CHARGE_TREMOR = 3.2;
-const float CHARGE_GLOW = 2.4;
-// Dimming eases off as the charge rises, so the fist burns brighter than the hand.
-const float CHARGE_DIM = 0.3;
+const float CHARGE_TREMOR = 1.2;
+const float CHARGE_GLOW = 1.6;
+// A fist packs the same particles into a third of the hand's area, so they are dimmed
+// further as it charges; its heat shows in their color rather than in raw brightness.
+const float CHARGE_DIM = 0.1;
 
 /**
  * Integer hash (pcg3d) of a particle's texel and a salt, in [0, 1). Hashing the
