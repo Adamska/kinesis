@@ -4,7 +4,7 @@ A real-time fluid of up to a million particles simulated entirely on the GPU and
 
 **Live demo: [kinesis-chi.vercel.app](https://kinesis-chi.vercel.app)**
 
-https://github.com/user-attachments/assets/3f41e1b1-8396-4dca-bb25-a712b9d310d2
+![Kinesis controlling 250k particule points with hand-tracking](https://github.com/user-attachments/assets/1dd3d6c4-ef08-41ec-afac-8d51c5d7cad5)
 
 The simulation starts at full fidelity on page load with no permissions required. An autonomous attractor drives the field until you take over with the pointer, a touch screen or webcam tracking.
 
